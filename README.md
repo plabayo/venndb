@@ -216,8 +216,6 @@ let active_managers: Vec<&mut Employee> = db.mutate()
 These crates uses `#![forbid(unsafe_code)]` to ensure everything is implemented in
 100% safe Rust.
 
-> The exception is [flagdb-chrome](flagdb-chrome) as we bind there to C++ code using CXX.
-
 ## Contributing
 
 :balloon: Thanks for your help improving the project! We are so happy to have
@@ -226,7 +224,7 @@ you! We have a [contributing guide][contributing] to help you get involved in th
 
 ## License
 
-This project is licensed under the [MIT license][LICENSE].
+This project is licensed under the [MIT license][license].
 
 ### Contribution
 
