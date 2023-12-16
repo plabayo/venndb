@@ -1,18 +1,18 @@
-![flagdb banner](./docs/img/banner.png)
+![venndb banner](./docs/img/banner.svg)
 
 [![Build Status][build-status]][build-url]
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
 
-[crates-badge]: https://img.shields.io/crates/v/flagdb.svg
-[crates-url]: https://crates.io/crates/flagdb
+[crates-badge]: https://img.shields.io/crates/v/venndb.svg
+[crates-url]: https://crates.io/crates/venndb
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/plabayo/flagdb/blob/main/LICENSE
-[build-status]: https://github.com/plabayo/flagdb/actions/workflows/CI.yml/badge.svg?branch=main
-[build-url]: https://github.com/plabayo/flagdb/actions/workflows/CI.yml
+[mit-url]: https://github.com/plabayo/venndb/blob/main/LICENSE
+[build-status]: https://github.com/plabayo/venndb/actions/workflows/CI.yml/badge.svg?branch=main
+[build-url]: https://github.com/plabayo/venndb/actions/workflows/CI.yml
 
-[Github Repository](https://github.com/plabayo/flagdb) |
-[API Docs](https://docs.rs/flagdb)
+[Github Repository](https://github.com/plabayo/venndb) |
+[API Docs](https://docs.rs/venndb)
 
 An in-memory database in Rust for rows queried using bit (flag) columns.
 This database is designed for a very specific use case where you have mostly static data that you typically load at startup and have to query constantly using very simple filters. Datasets
@@ -28,9 +28,9 @@ Contributions and feedback are welcome.
 ### Read Only Database Example
 
 ```rust
-use flagdb::flagdb;
+use venndb::venndb;
 
-flagdb! {
+venndb! {
     struct Employee {
         id: u32,
         name: String,
@@ -93,7 +93,7 @@ What's going om under the hood? High level the following is generated
 (use `cargo expand` to see the fully generated code):
 
 ```rust
-#[derive(Debug, flagdb::Serialize, flagdb::Deserialize)]
+#[derive(Debug, venndb::Serialize, venndb::Deserialize)]
 struct Employee {
     pub id: u32,
     pub name: String,
@@ -103,7 +103,7 @@ struct Employee {
     pub department: EmployeeDepartment,
 }
 
-#[derive(Debug, flagdb::Serialize, flagdb::Deserialize)]
+#[derive(Debug, venndb::Serialize, venndb::Deserialize)]
 enum EmployeeDepartment {
     Sales,
     Marketing,
@@ -115,10 +115,10 @@ enum EmployeeDepartment {
 #[derive(Debug)]
 struct EmployeeDB {
     employees: Vec<Employee>,
-    is_manager: flagdb::BitVec,
-    is_admin: flagdb::BitVec,
-    is_active: flagdb::BitVec,
-    departments: flagdb::BitMap<EmployeeDepartment>,
+    is_manager: venndb::BitVec,
+    is_admin: venndb::BitVec,
+    is_active: venndb::BitVec,
+    departments: venndb::BitMap<EmployeeDepartment>,
 }
 
 struct EmployeeDBQueryBuilder<'a> {
@@ -170,11 +170,11 @@ impl IntoIterator for EmployeeDB {
 Should you need to mutate the database, you can do so with
 a couple of changes.
 
-First the flagdb creation has to be change a bit:
+First the venndb creation has to be change a bit:
 
-flagdb! {
+venndb! {
     struct Employee {
-        #[flagdb::key]
+        #[venndb::key]
         id: u32,
         name: String,
         is_manager: bool,
@@ -190,8 +190,8 @@ flagdb! {
     }
 }
 
-Note the use of the `#[flagdb::key]` attribute on the `id` field,
-which will ensure that internally we generate a `flagdb::FxHashMap<u32, usize>`
+Note the use of the `#[venndb::key]` attribute on the `id` field,
+which will ensure that internally we generate a `venndb::FxHashMap<u32, usize>`
 property in the actual `EmployeeDB` struct.
 
 Then we can mutate previously queried employees as follows:
@@ -220,7 +220,7 @@ These crates uses `#![forbid(unsafe_code)]` to ensure everything is implemented 
 
 :balloon: Thanks for your help improving the project! We are so happy to have
 you! We have a [contributing guide][contributing] to help you get involved in the
-`flagdb` project.
+`venndb` project.
 
 ## License
 
@@ -229,8 +229,8 @@ This project is licensed under the [MIT license][license].
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in `flagdb` by you, shall be licensed as MIT, without any
+for inclusion in `venndb` by you, shall be licensed as MIT, without any
 additional terms or conditions.
 
-[contributing]: https://github.com/plabayo/flagdb/blob/main/CONTRIBUTING.md
-[license]: https://github.com/plabayo/flagdb/blob/main/flagdb/LICENSE
+[contributing]: https://github.com/plabayo/venndb/blob/main/CONTRIBUTING.md
+[license]: https://github.com/plabayo/venndb/blob/main/venndb/LICENSE
