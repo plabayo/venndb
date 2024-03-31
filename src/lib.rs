@@ -8,7 +8,7 @@ use syn::{Data::Struct, DataStruct, DeriveInput, Fields::Named, FieldsNamed};
 pub fn venndb(item: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse2(item.into()).unwrap();
 
-    let name_db = format_ident!("{}VennDB", ast.ident);
+    let name_db = format_ident!("{}DB", ast.ident);
 
     let _fields = match ast.data {
         Struct(DataStruct {

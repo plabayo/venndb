@@ -31,5 +31,5 @@ fn main() {
     };
     println!("employee: {:#?}", employee);
 
-    let _db = EmployeeVennDB::default();
+    let _db = EmployeeDB::new();
 }

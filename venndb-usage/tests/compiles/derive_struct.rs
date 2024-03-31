@@ -18,4 +18,6 @@ pub enum Department {
     HR,
 }
 
-fn main() {}
+fn main() {
+    let _ = EmployeeDB::new();
+}
