@@ -8,7 +8,7 @@ use parse_attrs::TypeAttrs;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
-/// Entrypoint for `#[derive(VennDB)]`.
+/// Derive macro generating VennDB functionality for this struct.
 #[proc_macro_derive(VennDB, attributes(venndb))]
 pub fn venndb(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
