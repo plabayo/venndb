@@ -114,7 +114,10 @@ without any additional terms or conditions.
 
 ### Acknowledgements
 
-Special thanks goes to all involved in developing, maintaining and supporting [the Rust programming language](https://www.rust-lang.org/). Also a big shoutout to the ["Write Powerful Rust Macros" book by _Sam Van Overmeire_](https://www.manning.com/books/write-powerful-rust-macros), which gave the courage to develop this crate, finally.
+Special thanks goes to all involved in developing, maintaining and supporting [the Rust programming language](https://www.rust-lang.org/). Also a big shoutout to the ["Write Powerful Rust Macros" book by _Sam Van Overmeire_](https://www.manning.com/books/write-powerful-rust-macros), which gave the courage to develop this crate.
+
+Some code was also copied/forked from [google/argh](https://github.com/google/argh), for which thank you,
+we are big fans of that crate. Go use it if you want to create a CLI App.
 
 ## 💖 | Sponsors
 

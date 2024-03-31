@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
+mod errors;
+mod parse_attrs;
+
 use errors::Errors;
+use parse_attrs::TypeAttrs;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-
-mod errors;
 
 /// Entrypoint for `#[derive(VennDB)]`.
 #[proc_macro_derive(VennDB, attributes(venndb))]
@@ -18,8 +20,11 @@ pub fn venndb(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// as well as all errors that occurred.
 fn impl_from_args(input: &syn::DeriveInput) -> TokenStream {
     let errors = &Errors::default();
+    let type_attrs = &TypeAttrs::parse(errors, input);
     let mut output_tokens = match &input.data {
-        syn::Data::Struct(ds) => impl_from_args_struct(errors, &input.ident, &input.generics, ds),
+        syn::Data::Struct(ds) => {
+            impl_from_args_struct(errors, &input.ident, type_attrs, &input.generics, ds)
+        }
         syn::Data::Enum(_) => {
             errors.err(input, "`#[derive(VennDB)]` cannot be applied to enums");
             TokenStream::new()
@@ -37,6 +42,7 @@ fn impl_from_args(input: &syn::DeriveInput) -> TokenStream {
 fn impl_from_args_struct(
     errors: &Errors,
     name: &syn::Ident,
+    type_attrs: &TypeAttrs,
     _generic_args: &syn::Generics,
     ds: &syn::DataStruct,
 ) -> TokenStream {
@@ -58,7 +64,10 @@ fn impl_from_args_struct(
         }
     };
 
-    let name_db = format_ident!("{}DB", name);
+    let name_db = match &type_attrs.name {
+        Some(name) => format_ident!("{}", name.value()),
+        None => format_ident!("{}DB", name),
+    };
 
     quote! {
         #[non_exhaustive]
