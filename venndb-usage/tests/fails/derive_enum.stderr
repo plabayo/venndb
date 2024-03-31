@@ -1,8 +1,5 @@
-error: Only Structs with named fields are supported
+error: `#[derive(VennDB)]` cannot be applied to enums
  --> tests/fails/derive_enum.rs:4:1
   |
-4 | / enum MyEnum {
-5 | |     A,
-6 | |     B,
-7 | | }
-  | |_^
+4 | enum MyEnum {
+  | ^^^^
