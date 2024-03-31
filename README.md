@@ -317,27 +317,3 @@ let active_managers: Vec<&mut Employee> = db.mutate()
     .run()
     .map(|employee| employee.is_active = false);
 ```
-
-## Safety
-
-These crates uses `#![forbid(unsafe_code)]` to ensure everything is implemented in
-100% safe Rust.
-
-## Contributing
-
-:balloon: Thanks for your help improving the project! We are so happy to have
-you! We have a [contributing guide][contributing] to help you get involved in the
-`venndb` project.
-
-## License
-
-This project is licensed under the [MIT license][license].
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in `venndb` by you, shall be licensed as MIT, without any
-additional terms or conditions.
-
-[contributing]: https://github.com/plabayo/venndb/blob/main/CONTRIBUTING.md
-[license]: https://github.com/plabayo/venndb/blob/main/venndb/LICENSE
