@@ -129,3 +129,7 @@ and other open source frameworks such as <https://github.com/plabayo/rama>.
 
 Sponsors receive perks and depending on your regular contribution it also
 allows you to rely on us for support and consulting.
+
+Finally, you can also support us by shopping Plabayo <3 `VennDB` merchandise 🛍️ at <https://plabayo.threadless.com/>.
+
+[![Plabayo's Store With VennDB Merchandise](./docs/img/plabayo_mech_store_venndb.png)](https://plabayo.threadless.com/)
