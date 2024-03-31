@@ -6,3 +6,6 @@ edition = "2021"
 
 [dependencies]
 venndb = { path = ".." }
+
+[dev-dependencies]
+trybuild = "1"
