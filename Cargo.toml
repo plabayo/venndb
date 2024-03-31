@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "venndb-usage"]
+
 [package]
 description = "an in-memory database in Rust for rows queried using bit (flag) columns"
 edition = "2021"
@@ -11,6 +14,14 @@ categories = ["database", "db"]
 authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
 version = "0.1.0"
 rust-version = "1.75.0"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+quote = "1"
+syn = "2"
+
+[lib]
+proc-macro = true

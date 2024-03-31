@@ -1,16 +1,42 @@
 #![forbid(unsafe_code)]
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+use proc_macro::TokenStream;
+use quote::{format_ident, quote};
+use syn::{Data::Struct, DataStruct, DeriveInput, Fields::Named, FieldsNamed};
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[proc_macro_derive(VennDB)]
+pub fn venndb(item: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse2(item.into()).unwrap();
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    let name_db = format_ident!("{}VennDB", ast.ident);
+
+    let _fields = match ast.data {
+        Struct(DataStruct {
+            fields: Named(FieldsNamed { ref named, .. }),
+            ..
+        }) => named,
+        _ => {
+            return syn::Error::new_spanned(ast, "Only Structs with named fields are supported")
+                .to_compile_error()
+                .into()
+        }
+    };
+
+    quote! {
+        #[non_exhaustive]
+        struct #name_db;
+
+        impl #name_db {
+            fn new() -> Self {
+                Self
+            }
+        }
+
+        impl Default for #name_db {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
     }
+    .into()
 }
