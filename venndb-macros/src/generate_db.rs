@@ -42,7 +42,7 @@ fn generate_db_struct(
                 let field_name = field.map_name();
                 let ty: &syn::Type = field.ty();
                 quote! {
-                    #field_name: std::collections::HashMap<#ty, usize>,
+                    #field_name: ::venndb::internal::HashMap<#ty, usize>,
                 }
             }
         })
@@ -124,7 +124,7 @@ pub fn generate_db_struct_method_new(
             FieldInfo::Key(field) => {
                 let name = field.map_name();
                 quote! {
-                    #name: std::collections::HashMap::new(),
+                    #name: ::venndb::internal::HashMap::new(),
                 }
             }
         })
@@ -196,7 +196,7 @@ pub fn generate_db_struct_method_with_capacity(
             FieldInfo::Key(field) => {
                 let name = field.map_name();
                 quote! {
-                    #name: std::collections::HashMap::with_capacity(capacity),
+                    #name: ::venndb::internal::HashMap::with_capacity(capacity),
                 }
             }
         })
@@ -227,10 +227,10 @@ pub fn generate_db_struct_methods_key(
                 let ty = field.ty();
                 let method_name = field.method_name();
                 quote! {
-                    #vis fn #method_name<Q>(&self, key: &Q) -> std::option::Option<&#name>
+                    #vis fn #method_name<Q>(&self, key: &Q) -> ::std::option::Option<&#name>
                         where
-                            #ty: std::borrow::Borrow<Q>,
-                            Q: std::hash::Hash + std::cmp::Eq + ?std::marker::Sized,
+                            #ty: ::std::borrow::Borrow<Q>,
+                            Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized,
                     {
                         self.#map_name.get(key).and_then(|index| self.rows.get(*index))
                     }

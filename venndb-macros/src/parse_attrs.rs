@@ -21,19 +21,30 @@ impl FieldAttrs {
                 continue;
             };
 
+            let mut skipped = false;
+            let mut is_key = false;
+
             for meta in ml {
                 let name = meta.path();
                 if name.is_ident("key") {
-                    this.kind = Some(FieldKind::Key);
+                    is_key = true;
+                } else if name.is_ident("skip") {
+                    skipped = true;
                 } else {
                     errors.err(
                         &meta,
                         concat!(
-                            "Invalid field-level `argh` attribute\n",
+                            "Invalid field-level `venndb` attribute\n",
                             "Expected one of: `key`",
                         ),
                     );
                 }
+            }
+
+            if skipped {
+                this.kind = None;
+            } else if is_key {
+                this.kind = Some(FieldKind::Key);
             }
         }
 
@@ -86,7 +97,7 @@ fn venndb_attr_to_meta_list(
     errors: &Errors,
     attr: &syn::Attribute,
 ) -> Option<impl IntoIterator<Item = syn::Meta>> {
-    if !is_argh_attr(attr) {
+    if !is_venndb_attr(attr) {
         return None;
     }
     let ml = errors.expect_meta_list(&attr.meta)?;
@@ -101,6 +112,6 @@ fn is_matching_attr(name: &str, attr: &syn::Attribute) -> bool {
 }
 
 /// Checks for `#[venndb ...]`
-fn is_argh_attr(attr: &syn::Attribute) -> bool {
+fn is_venndb_attr(attr: &syn::Attribute) -> bool {
     is_matching_attr("venndb", attr)
 }
