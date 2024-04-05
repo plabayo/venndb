@@ -110,6 +110,7 @@ mod tests {
             .collect();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, 3);
+        assert_eq!(query.execute().unwrap().first().id, 3);
 
         let mut query = db.query();
         assert!(query.is_active(false).execute().is_none());
