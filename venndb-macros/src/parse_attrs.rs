@@ -1,3 +1,5 @@
+use quote::ToTokens;
+
 use crate::errors::Errors;
 
 /// Attributes applied to a field of a `#![derive(VennDB)]` struct.
@@ -8,11 +10,15 @@ pub struct FieldAttrs {
 
 pub enum FieldKind {
     Key,
+    Filter,
 }
 
 impl FieldAttrs {
     pub fn parse(errors: &Errors, field: &syn::Field) -> Self {
         let mut this = Self::default();
+
+        let mut skipped = false;
+        let mut is_key = false;
 
         for attr in &field.attrs {
             let ml = if let Some(ml) = venndb_attr_to_meta_list(errors, attr) {
@@ -20,9 +26,6 @@ impl FieldAttrs {
             } else {
                 continue;
             };
-
-            let mut skipped = false;
-            let mut is_key = false;
 
             for meta in ml {
                 let name = meta.path();
@@ -40,15 +43,31 @@ impl FieldAttrs {
                     );
                 }
             }
+        }
 
-            if skipped {
-                this.kind = None;
-            } else if is_key {
-                this.kind = Some(FieldKind::Key);
-            }
+        if skipped {
+            this.kind = None;
+        } else if is_key {
+            this.kind = Some(FieldKind::Key);
+        } else if is_bool(&field.ty) {
+            this.kind = Some(FieldKind::Filter);
         }
 
         this
+    }
+}
+
+fn is_bool(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(syn::TypePath { path, .. }) = ty {
+        path.is_ident("bool")
+    } else {
+        if ty.to_token_stream().to_string().contains("bool") {
+            panic!(
+                "Expected bool, found {:?}",
+                ty.to_token_stream().to_string()
+            );
+        }
+        false
     }
 }
 

@@ -20,5 +20,6 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+bitvec = "1.0.1"
 hashbrown = "0.14.3"
 venndb-macros = { version = "0.1.0", path = "venndb-macros" }

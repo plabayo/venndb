@@ -23,6 +23,7 @@ pub struct StructField<'a> {
 
 pub enum FieldInfo<'a> {
     Key(KeyField<'a>),
+    Filter(FilterField<'a>),
 }
 
 pub struct KeyField<'a> {
@@ -48,6 +49,24 @@ impl<'a> KeyField<'a> {
     }
 }
 
+pub struct FilterField<'a> {
+    pub name: &'a Ident,
+}
+
+impl<'a> FilterField<'a> {
+    pub fn name(&'a self) -> &'a Ident {
+        self.name
+    }
+
+    pub fn filter_name(&self) -> Ident {
+        format_ident!("filter_{}", self.name)
+    }
+
+    pub fn filter_not_name(&self) -> Ident {
+        format_ident!("filter_not_{}", self.name)
+    }
+}
+
 impl<'a> StructField<'a> {
     /// Attempts to parse a field of a `#[derive(VennDB)]` struct, pulling out the
     /// fields required for code generation.
@@ -63,6 +82,7 @@ impl<'a> StructField<'a> {
                 name: self.name,
                 ty: &self.field.ty,
             }),
+            FieldKind::Filter => FieldInfo::Filter(FilterField { name: self.name }),
         })
     }
 }

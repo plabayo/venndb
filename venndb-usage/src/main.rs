@@ -70,4 +70,48 @@ mod tests {
         assert_eq!(employee.id, 1);
         assert_eq!(employee.name, "Alice");
     }
+
+    #[test]
+    fn test_employee_query_filters() {
+        let mut db = EmployeeDB::default();
+
+        db.append(Employee {
+            id: 1,
+            name: "Alice".to_string(),
+            is_manager: true,
+            is_admin: false,
+            is_active: true,
+            department: Department::Engineering,
+        });
+        db.append(Employee {
+            id: 2,
+            name: "Bob".to_string(),
+            is_manager: false,
+            is_admin: false,
+            is_active: true,
+            department: Department::Engineering,
+        });
+        db.append(Employee {
+            id: 3,
+            name: "Charlie".to_string(),
+            is_manager: true,
+            is_admin: true,
+            is_active: true,
+            department: Department::Sales,
+        });
+
+        let mut query = db.query();
+        let results: Vec<_> = query
+            .is_manager(true)
+            .is_admin(true)
+            .exec()
+            .unwrap()
+            .iter()
+            .collect();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, 3);
+
+        let mut query = db.query();
+        assert!(query.is_active(false).exec().is_none());
+    }
 }
