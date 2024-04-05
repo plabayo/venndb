@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       Expected one of: `key`
+ --> tests/fails/unknown_attr_field.rs:5:14
+  |
+5 |     #[venndb(foo)]
+  |              ^^^

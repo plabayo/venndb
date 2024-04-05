@@ -104,7 +104,7 @@ mod tests {
         let results: Vec<_> = query
             .is_manager(true)
             .is_admin(true)
-            .exec()
+            .execute()
             .unwrap()
             .iter()
             .collect();
@@ -112,6 +112,6 @@ mod tests {
         assert_eq!(results[0].id, 3);
 
         let mut query = db.query();
-        assert!(query.is_active(false).exec().is_none());
+        assert!(query.is_active(false).execute().is_none());
     }
 }

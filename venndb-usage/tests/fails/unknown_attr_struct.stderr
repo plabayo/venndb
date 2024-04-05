@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       Expected one of: `name`
+ --> tests/fails/unknown_attr_struct.rs:4:10
+  |
+4 | #[venndb(foo)]
+  |          ^^^

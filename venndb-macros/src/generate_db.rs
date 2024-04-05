@@ -407,7 +407,7 @@ fn generate_query_struct_impl(
             #(#filter_setters)*
 
             /// Execute the query on the database, returning an iterator over the results.
-            #vis fn exec(&self) -> Option<#name_query_result<'a>> {
+            #vis fn execute(&self) -> Option<#name_query_result<'a>> {
                 let mut filter = ::venndb::__internal::bitvec![1; self.db.rows.len()];
 
                 #(#filters)*

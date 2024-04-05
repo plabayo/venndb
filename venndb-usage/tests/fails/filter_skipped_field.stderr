@@ -1,0 +1,8 @@
+error[E0599]: no method named `is_active` found for struct `EmployeeDBQuery` in the current scope
+  --> tests/fails/filter_skipped_field.rs:20:11
+   |
+3  | #[derive(Debug, VennDB)]
+   |                 ------ method `is_active` not found for this struct
+...
+20 |     query.is_active(true);
+   |           ^^^^^^^^^ method not found in `EmployeeDBQuery<'_>`
