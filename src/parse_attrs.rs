@@ -1,5 +1,46 @@
 use crate::errors::Errors;
 
+/// Attributes applied to a field of a `#![derive(VennDB)]` struct.
+#[derive(Default)]
+pub struct FieldAttrs {
+    pub kind: Option<FieldKind>,
+}
+
+pub enum FieldKind {
+    Key,
+}
+
+impl FieldAttrs {
+    pub fn parse(errors: &Errors, field: &syn::Field) -> Self {
+        let mut this = Self::default();
+
+        for attr in &field.attrs {
+            let ml = if let Some(ml) = venndb_attr_to_meta_list(errors, attr) {
+                ml
+            } else {
+                continue;
+            };
+
+            for meta in ml {
+                let name = meta.path();
+                if name.is_ident("key") {
+                    this.kind = Some(FieldKind::Key);
+                } else {
+                    errors.err(
+                        &meta,
+                        concat!(
+                            "Invalid field-level `argh` attribute\n",
+                            "Expected one of: `key`",
+                        ),
+                    );
+                }
+            }
+        }
+
+        this
+    }
+}
+
 /// Represents a `#[derive(VennDB)]` type's top-level attributes.
 #[derive(Default)]
 pub struct TypeAttrs {

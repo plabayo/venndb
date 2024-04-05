@@ -4,6 +4,7 @@ use venndb::VennDB;
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
+    #[venndb(key)]
     id: u32,
     name: String,
     is_manager: bool,
@@ -39,7 +40,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_employee() {
+    fn test_employee_db_empty() {
+        let db = EmployeeDB::new();
+        assert_eq!(db.len(), 0);
+        assert_eq!(db.capacity(), 0);
+    }
+
+    #[test]
+    fn test_employee_db_append() {
+        let mut db = EmployeeDB::default();
+        assert_eq!(db.len(), 0);
+        assert_eq!(db.capacity(), 0);
+
         let employee = Employee {
             id: 1,
             name: "Alice".to_string(),
@@ -48,17 +60,14 @@ mod tests {
             is_active: true,
             department: Department::Engineering,
         };
+
+        db.append(employee);
+        assert_eq!(db.len(), 1);
+
+        assert!(db.get_by_id(&0).is_none());
+
+        let employee: &Employee = db.get_by_id(&1).unwrap();
         assert_eq!(employee.id, 1);
         assert_eq!(employee.name, "Alice");
-        assert!(employee.is_manager);
-        assert!(!employee.is_admin);
-        assert!(employee.is_active);
-        assert_eq!(employee.department, Department::Engineering);
-    }
-
-    #[test]
-    fn test_employee_db_empty_len() {
-        let db = EmployeeDB::new();
-        assert_eq!(db.len(), 0);
     }
 }
