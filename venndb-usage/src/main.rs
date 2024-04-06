@@ -115,4 +115,32 @@ mod tests {
         let mut query = db.query();
         assert!(query.is_active(false).execute().is_none());
     }
+
+    #[test]
+    #[should_panic]
+    fn test_employee_duplicate_key() {
+        // TODO: replace with error instead of panic
+        let mut db = EmployeeDB::default();
+        db.append(Employee {
+            id: 1,
+            name: "Alice".to_string(),
+            is_manager: true,
+            is_admin: false,
+            is_active: true,
+            department: Department::Engineering,
+        });
+
+        // duplicate key: id (=1)
+        db.append(Employee {
+            id: 1,
+            name: "Bob".to_string(),
+            is_manager: false,
+            is_admin: false,
+            is_active: true,
+            department: Department::Engineering,
+        });
+    }
+
+    // TODO: add test to ensure that no other keys
+    // have already been inserted!
 }

@@ -7,4 +7,10 @@ pub mod __internal {
 
     pub use bitvec::{bitvec, order::Lsb0, slice::IterOnes, vec::BitVec};
     pub use hashbrown::HashMap;
+
+    pub mod hash_map {
+        //! Internal types related to hash map.
+
+        pub use hashbrown::hash_map::Entry;
+    }
 }

@@ -199,15 +199,36 @@ pub fn generate_db_struct_method_append(
 ) -> TokenStream {
     let method_doc = format!("Append a new instance of [`{}`] to the database.", name);
 
-    let db_field_inserts: Vec<_> = fields
+    let db_field_insert_checks: Vec<_> = fields
         .iter()
-        .map(|info| match info {
+        .filter_map(|info| match info {
             FieldInfo::Key(field) => {
                 let map_name = field.map_name();
                 let field_name = field.name();
+                let entry_field_name = format_ident!("entry_{}", field_name);
+
+                Some(quote! {
+                    // TODO: handle duplicate key,
+                    // but only have error if we have possible error cases
+                    let #entry_field_name = match self.#map_name.entry(data.#field_name) {
+                        ::venndb::__internal::hash_map::Entry::Occupied(_) => todo!("duplicate key: return error"),
+                        ::venndb::__internal::hash_map::Entry::Vacant(entry) => entry,
+                    };
+                })
+            }
+            FieldInfo::Filter(_) =>  None,
+        })
+        .collect();
+
+    let db_field_insert_commits: Vec<_> = fields
+        .iter()
+        .map(|info| match info {
+            FieldInfo::Key(field) => {
+                let field_name = field.name();
+                let entry_field_name = format_ident!("entry_{}", field_name);
 
                 quote! {
-                    self.#map_name.insert(data.#field_name.clone(), index);
+                    #entry_field_name.insert(index);
                 }
             }
             FieldInfo::Filter(field) => {
@@ -227,7 +248,8 @@ pub fn generate_db_struct_method_append(
         #vis fn append(&mut self, data: #name) {
             let index = self.rows.len();
 
-            #(#db_field_inserts)*
+            #(#db_field_insert_checks)*
+            #(#db_field_insert_commits)*
 
             self.rows.push(data);
         }
