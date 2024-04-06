@@ -8,6 +8,13 @@ pub mod __internal {
     pub use bitvec::{bitvec, order::Lsb0, slice::IterOnes, vec::BitVec};
     pub use hashbrown::HashMap;
 
+    /// Generate a random `usize`.
+    pub fn rand_usize() -> usize {
+        use rand::Rng;
+
+        rand::thread_rng().gen()
+    }
+
     pub mod hash_map {
         //! Internal types related to hash map.
 

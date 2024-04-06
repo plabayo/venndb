@@ -75,6 +75,7 @@ fn generate_db_struct_methods(
 ) -> TokenStream {
     let method_new = generate_db_struct_method_new(name, name_db, vis, fields);
     let method_with_capacity = generate_db_struct_method_with_capacity(name, name_db, vis, fields);
+    let method_from_rows = generate_db_struct_method_from_rows(name, name_db, vis, fields);
     let field_methods = generate_db_struct_field_methods(name, name_db, vis, fields);
     let method_append = generate_db_struct_method_append(name, name_db, vis, fields);
 
@@ -83,6 +84,8 @@ fn generate_db_struct_methods(
             #method_new
 
             #method_with_capacity
+
+            #method_from_rows
 
             /// Return the number of rows in the database.
             #vis fn len(&self) -> usize {
@@ -103,6 +106,11 @@ fn generate_db_struct_methods(
             #field_methods
 
             #method_append
+
+            /// Consumes the database and returns the rows.
+            #vis fn into_rows(self) -> Vec<#name> {
+                self.rows
+            }
         }
     }
 }
@@ -191,6 +199,30 @@ pub fn generate_db_struct_method_with_capacity(
     }
 }
 
+pub fn generate_db_struct_method_from_rows(
+    name: &Ident,
+    _name_db: &Ident,
+    vis: &syn::Visibility,
+    _fields: &[FieldInfo],
+) -> TokenStream {
+    let method_doc = format!(
+        "Construct a new database from the given set of [`{}`] rows.",
+        name
+    );
+
+    quote! {
+        #[doc=#method_doc]
+        #vis fn from_rows(rows: Vec<#name>) -> Self {
+            let mut db = Self::with_capacity(rows.len());
+            for (index, row) in rows.iter().enumerate() {
+                db.append_internal(row, index);
+            }
+            db.rows = rows;
+            db
+        }
+    }
+}
+
 pub fn generate_db_struct_method_append(
     name: &Ident,
     _name_db: &Ident,
@@ -248,10 +280,14 @@ pub fn generate_db_struct_method_append(
         #vis fn append(&mut self, data: #name) {
             let index = self.rows.len();
 
-            #(#db_field_insert_checks)*
-            #(#db_field_insert_commits)*
+            self.append_internal(&data, index);
 
             self.rows.push(data);
+        }
+
+        fn append_internal(&mut self, data: &#name, index: usize) {
+            #(#db_field_insert_checks)*
+            #(#db_field_insert_commits)*
         }
     }
 }
@@ -391,6 +427,19 @@ fn generate_query_struct_impl(
         })
         .collect();
 
+    let filter_resetters: Vec<_> = fields
+        .iter()
+        .filter_map(|info| match info {
+            FieldInfo::Filter(field) => {
+                let name = field.name();
+                Some(quote! {
+                    self.#name = None;
+                })
+            }
+            FieldInfo::Key(_) => None,
+        })
+        .collect();
+
     let filters: Vec<_> = fields
         .iter()
         .filter_map(|info| match info {
@@ -428,6 +477,14 @@ fn generate_query_struct_impl(
         impl<'a> #name_query<'a> {
             #(#filter_setters)*
 
+            /// Reset the query to its initial values.
+            #vis fn reset(&mut self) -> &mut Self {
+                #(#filter_resetters)*
+                self
+            }
+
+            // TODO: support a filter on the result based on a predicate
+
             /// Execute the query on the database, returning an iterator over the results.
             #vis fn execute(&self) -> Option<#name_query_result<'a>> {
                 let mut filter = ::venndb::__internal::bitvec![1; self.db.rows.len()];
@@ -455,6 +512,12 @@ fn generate_query_struct_impl(
         impl<'a> #name_query_result<'a> {
             #vis fn first(&self) -> &'a #name {
                 let index = self.v.iter_ones().next().expect("should contains at least one result");
+                &self.rows[index]
+            }
+
+            #vis fn any(&self) -> &'a #name {
+                let n = ::venndb::__internal::rand_usize() % self.v.count_ones();
+                let index = self.v.iter_ones().nth(n).unwrap();
                 &self.rows[index]
             }
 
