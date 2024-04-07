@@ -324,4 +324,49 @@ mod tests {
         let result = query.execute().unwrap().any();
         assert!(result.id == 1 || result.id == 2 || result.id == 3);
     }
+
+    #[test]
+    fn test_db_without_keys() {
+        #[derive(Debug, VennDB)]
+        struct NoKeys {
+            name: String,
+            a: bool,
+            b: bool,
+        }
+
+        let mut db = NoKeysDB::from_rows(vec![
+            NoKeys {
+                name: "Alice".to_string(),
+                a: true,
+                b: false,
+            },
+            NoKeys {
+                name: "Bob".to_string(),
+                a: false,
+                b: true,
+            },
+        ]);
+
+        assert_eq!(db.len(), 2);
+        assert_eq!(db.capacity(), 2);
+
+        let mut query = db.query();
+        query.a(true);
+        let results: Vec<_> = query.execute().unwrap().iter().collect();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "Alice");
+
+        db.append(NoKeys {
+            name: "Charlie".to_string(),
+            a: true,
+            b: true,
+        });
+
+        let mut query = db.query();
+        query.b(true);
+        let results: Vec<_> = query.execute().unwrap().iter().collect();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].name, "Bob");
+        assert_eq!(results[1].name, "Charlie");
+    }
 }

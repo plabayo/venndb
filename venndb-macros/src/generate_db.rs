@@ -88,6 +88,7 @@ fn generate_db_struct_methods(
     let method_append = generate_db_struct_method_append(name, name_db, vis, db_error, fields);
 
     quote! {
+        #[allow(clippy::unused_unit)]
         impl #name_db {
             #method_new
 
