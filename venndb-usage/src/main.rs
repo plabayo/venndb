@@ -6,6 +6,7 @@ use venndb::VennDB;
 pub struct Employee {
     #[venndb(key)]
     id: u32,
+    #[venndb(key)]
     name: String,
     is_manager: bool,
     is_admin: bool,
@@ -61,12 +62,16 @@ mod tests {
             department: Department::Engineering,
         };
 
-        db.append(employee);
+        db.append(employee).unwrap();
         assert_eq!(db.len(), 1);
 
         assert!(db.get_by_id(&0).is_none());
 
         let employee: &Employee = db.get_by_id(&1).unwrap();
+        assert_eq!(employee.id, 1);
+        assert_eq!(employee.name, "Alice");
+
+        let employee: &Employee = db.get_by_name("Alice").unwrap();
         assert_eq!(employee.id, 1);
         assert_eq!(employee.name, "Alice");
     }
@@ -82,7 +87,8 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
         db.append(Employee {
             id: 2,
             name: "Bob".to_string(),
@@ -90,7 +96,8 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
         db.append(Employee {
             id: 3,
             name: "Charlie".to_string(),
@@ -98,7 +105,8 @@ mod tests {
             is_admin: true,
             is_active: true,
             department: Department::Sales,
-        });
+        })
+        .unwrap();
 
         let mut query = db.query();
         let results: Vec<_> = query
@@ -117,7 +125,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_employee_duplicate_key() {
         // TODO: replace with error instead of panic
         let mut db = EmployeeDB::default();
@@ -128,21 +135,72 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
 
         // duplicate key: id (=1)
-        db.append(Employee {
-            id: 1,
-            name: "Bob".to_string(),
-            is_manager: false,
-            is_admin: false,
-            is_active: true,
-            department: Department::Engineering,
-        });
+        let err = db
+            .append(Employee {
+                id: 1,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            })
+            .unwrap_err();
+        assert_eq!(EmployeeDBErrorKind::DuplicateKey, err.kind());
+        assert_eq!("Bob", err.into_input().name);
     }
 
-    // TODO: add test to ensure that no other keys
-    // have already been inserted!
+    #[test]
+    fn test_duplicate_key_with_zero_polution() {
+        #[derive(Debug, VennDB)]
+        struct MultiKey {
+            #[venndb(key)]
+            a: String,
+            #[venndb(key)]
+            b: String,
+            #[venndb(key)]
+            c: String,
+            d: bool,
+            e: bool,
+        }
+
+        let mut db = MultiKeyDB::from_rows(vec![
+            MultiKey {
+                a: "a".to_string(),
+                b: "b".to_string(),
+                c: "c".to_string(),
+                d: true,
+                e: false,
+            },
+            MultiKey {
+                a: "A".to_string(),
+                b: "B".to_string(),
+                c: "C".to_string(),
+                d: false,
+                e: true,
+            },
+        ])
+        .unwrap();
+
+        let err = db
+            .append(MultiKey {
+                a: "foo".to_string(),
+                b: "bar".to_string(),
+                c: "c".to_string(),
+                d: false,
+                e: true,
+            })
+            .unwrap_err();
+        assert_eq!(MultiKeyDBErrorKind::DuplicateKey, err.kind());
+
+        // ensure there was no polution,
+        // this will panic in ase there was
+        assert!(db.get_by_a("foo").is_none());
+        assert!(db.get_by_b("bar").is_none());
+    }
 
     #[test]
     fn test_into_from_rows() {
@@ -165,7 +223,7 @@ mod tests {
             },
         ];
 
-        let db = EmployeeDB::from_rows(rows);
+        let db = EmployeeDB::from_rows(rows).unwrap();
 
         assert_eq!(db.len(), 2);
         assert_eq!(db.capacity(), 2);
@@ -193,7 +251,8 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
         db.append(Employee {
             id: 2,
             name: "Bob".to_string(),
@@ -201,7 +260,8 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
         db.append(Employee {
             id: 3,
             name: "Charlie".to_string(),
@@ -209,7 +269,8 @@ mod tests {
             is_admin: true,
             is_active: true,
             department: Department::Sales,
-        });
+        })
+        .unwrap();
 
         let mut query = db.query();
         query.is_manager(true);
@@ -237,7 +298,8 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
         db.append(Employee {
             id: 2,
             name: "Bob".to_string(),
@@ -245,7 +307,8 @@ mod tests {
             is_admin: false,
             is_active: true,
             department: Department::Engineering,
-        });
+        })
+        .unwrap();
         db.append(Employee {
             id: 3,
             name: "Charlie".to_string(),
@@ -253,7 +316,8 @@ mod tests {
             is_admin: true,
             is_active: true,
             department: Department::Sales,
-        });
+        })
+        .unwrap();
 
         let mut query = db.query();
         query.is_active(true);

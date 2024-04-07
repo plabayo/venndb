@@ -30,7 +30,7 @@ fn main() {
         is_admin: false,
         is_active: true,
         department: Department::Engineering,
-    });
+    }).unwrap();
 
     let employee_ref = db.get_by_id(&1).unwrap();
     assert_eq!(employee_ref.id, 1);

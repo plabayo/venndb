@@ -1,6 +1,6 @@
 use crate::field::{FieldInfo, StructField};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::Ident;
 
 /// Generate the venndb logic
@@ -12,10 +12,14 @@ pub fn generate_db(
 ) -> TokenStream {
     let fields: Vec<_> = fields.iter().filter_map(StructField::info).collect();
 
+    let db_error = DbError::new(&fields[..]);
+
     let db_struct = generate_db_struct(name, name_db, vis, &fields[..]);
-    let db_struct_methods = generate_db_struct_methods(name, name_db, vis, &fields[..]);
+    let db_struct_methods = generate_db_struct_methods(name, name_db, vis, &db_error, &fields[..]);
 
     let db_query = generate_query_struct(name, name_db, vis, &fields[..]);
+
+    let db_error_definitions = db_error.generate_definitions(name_db, vis);
 
     quote! {
         #db_struct
@@ -23,6 +27,8 @@ pub fn generate_db(
         #db_struct_methods
 
         #db_query
+
+        #db_error_definitions
     }
 }
 
@@ -71,13 +77,15 @@ fn generate_db_struct_methods(
     name: &Ident,
     name_db: &Ident,
     vis: &syn::Visibility,
+    db_error: &DbError,
     fields: &[FieldInfo],
 ) -> TokenStream {
     let method_new = generate_db_struct_method_new(name, name_db, vis, fields);
     let method_with_capacity = generate_db_struct_method_with_capacity(name, name_db, vis, fields);
-    let method_from_rows = generate_db_struct_method_from_rows(name, name_db, vis, fields);
+    let method_from_rows =
+        generate_db_struct_method_from_rows(name, name_db, vis, db_error, fields);
     let field_methods = generate_db_struct_field_methods(name, name_db, vis, fields);
-    let method_append = generate_db_struct_method_append(name, name_db, vis, fields);
+    let method_append = generate_db_struct_method_append(name, name_db, vis, db_error, fields);
 
     quote! {
         impl #name_db {
@@ -115,7 +123,7 @@ fn generate_db_struct_methods(
     }
 }
 
-pub fn generate_db_struct_method_new(
+fn generate_db_struct_method_new(
     name: &Ident,
     _name_db: &Ident,
     vis: &syn::Visibility,
@@ -157,7 +165,7 @@ pub fn generate_db_struct_method_new(
     }
 }
 
-pub fn generate_db_struct_method_with_capacity(
+fn generate_db_struct_method_with_capacity(
     name: &Ident,
     _name_db: &Ident,
     vis: &syn::Visibility,
@@ -199,10 +207,11 @@ pub fn generate_db_struct_method_with_capacity(
     }
 }
 
-pub fn generate_db_struct_method_from_rows(
+fn generate_db_struct_method_from_rows(
     name: &Ident,
-    _name_db: &Ident,
+    name_db: &Ident,
     vis: &syn::Visibility,
+    db_error: &DbError,
     _fields: &[FieldInfo],
 ) -> TokenStream {
     let method_doc = format!(
@@ -210,23 +219,36 @@ pub fn generate_db_struct_method_from_rows(
         name
     );
 
+    let return_type = db_error.generate_fn_output(name_db, quote! { Vec<#name> }, quote! { Self });
+    let append_internal_call = db_error.generate_fn_error_kind_usage(
+        name_db,
+        quote! {
+            db.append_internal(row, index)
+        },
+        quote! {
+            rows
+        },
+    );
+    let fn_result = db_error.generate_fn_return_value_ok(quote! { db });
+
     quote! {
         #[doc=#method_doc]
-        #vis fn from_rows(rows: Vec<#name>) -> Self {
+        #vis fn from_rows(rows: Vec<#name>) -> #return_type {
             let mut db = Self::with_capacity(rows.len());
             for (index, row) in rows.iter().enumerate() {
-                db.append_internal(row, index);
+                #append_internal_call
             }
             db.rows = rows;
-            db
+            #fn_result
         }
     }
 }
 
-pub fn generate_db_struct_method_append(
+fn generate_db_struct_method_append(
     name: &Ident,
-    _name_db: &Ident,
+    name_db: &Ident,
     vis: &syn::Visibility,
+    db_error: &DbError,
     fields: &[FieldInfo],
 ) -> TokenStream {
     let method_doc = format!("Append a new instance of [`{}`] to the database.", name);
@@ -238,12 +260,15 @@ pub fn generate_db_struct_method_append(
                 let map_name = field.map_name();
                 let field_name = field.name();
                 let entry_field_name = format_ident!("entry_{}", field_name);
+                let db_duplicate_error_kind_creation = DbError::generate_duplicate_key_error_kind_creation(
+                    name_db,
+                );
 
                 Some(quote! {
                     // TODO: handle duplicate key,
                     // but only have error if we have possible error cases
-                    let #entry_field_name = match self.#map_name.entry(data.#field_name) {
-                        ::venndb::__internal::hash_map::Entry::Occupied(_) => todo!("duplicate key: return error"),
+                    let #entry_field_name = match self.#map_name.entry(data.#field_name.clone()) {
+                        ::venndb::__internal::hash_map::Entry::Occupied(_) => return Err(#db_duplicate_error_kind_creation),
                         ::venndb::__internal::hash_map::Entry::Vacant(entry) => entry,
                     };
                 })
@@ -275,24 +300,37 @@ pub fn generate_db_struct_method_append(
         })
         .collect();
 
+    let append_return_type = db_error.generate_fn_output(name_db, quote! { #name }, quote! { () });
+    let append_kind_return_type = db_error.generate_fn_kind_output(name_db, quote! { () });
+
+    let append_internal_call = db_error.generate_fn_error_kind_usage(
+        name_db,
+        quote! {
+            self.append_internal(&data, index)
+        },
+        quote! { data },
+    );
+
+    let append_return_output = db_error.generate_fn_return_value_ok(quote! { () });
+
     quote! {
         #[doc=#method_doc]
-        #vis fn append(&mut self, data: #name) {
+        #vis fn append(&mut self, data: #name) -> #append_return_type {
             let index = self.rows.len();
-
-            self.append_internal(&data, index);
-
+            #append_internal_call
             self.rows.push(data);
+            #append_return_output
         }
 
-        fn append_internal(&mut self, data: &#name, index: usize) {
+        fn append_internal(&mut self, data: &#name, index: usize) -> #append_kind_return_type {
             #(#db_field_insert_checks)*
             #(#db_field_insert_commits)*
+            #append_return_output
         }
     }
 }
 
-pub fn generate_db_struct_field_methods(
+fn generate_db_struct_field_methods(
     name: &Ident,
     _name_db: &Ident,
     vis: &syn::Visibility,
@@ -541,6 +579,177 @@ fn generate_query_struct_impl(
             fn next(&mut self) -> Option<Self::Item> {
                 self.iter_ones.next().map(|index| &self.rows[index])
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+/// Used to generate the optional error logic,
+/// which we only which to generate in case operations are possible to fail.
+///
+/// Example: duplicate key, in case a key field is used
+struct DbError {
+    error_kinds: Vec<DbErrorKind>,
+}
+
+#[derive(Debug)]
+enum DbErrorKind {
+    DuplicateKey,
+}
+
+impl ToTokens for DbErrorKind {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::DuplicateKey => {
+                tokens.extend(quote! {
+                    DuplicateKey,
+                });
+            }
+        }
+    }
+}
+
+impl DbError {
+    fn new(fields: &[FieldInfo]) -> Self {
+        let error_duplicate_key = fields.iter().any(|info| matches!(info, FieldInfo::Key(_)));
+        let error_kinds = if error_duplicate_key {
+            vec![DbErrorKind::DuplicateKey]
+        } else {
+            Vec::new()
+        };
+
+        Self { error_kinds }
+    }
+
+    fn generate_duplicate_key_error_kind_creation(name_db: &Ident) -> TokenStream {
+        let ident_error_kind = format_ident!("{}ErrorKind", name_db);
+        quote! {
+            #ident_error_kind::DuplicateKey
+        }
+    }
+
+    fn generate_fn_error_kind_usage(
+        &self,
+        name_db: &Ident,
+        original: TokenStream,
+        input: TokenStream,
+    ) -> TokenStream {
+        if self.error_kinds.is_empty() {
+            return quote! {
+                #original;
+            };
+        }
+
+        let ident_error = format_ident!("{}Error", name_db);
+
+        quote! {
+            if let Err(kind) = #original {
+                return Err(#ident_error::new(kind, #input, index));
+            }
+        }
+    }
+
+    fn generate_fn_return_value_ok(&self, output: TokenStream) -> TokenStream {
+        if self.error_kinds.is_empty() {
+            return output;
+        }
+        quote! {
+            Ok(#output)
+        }
+    }
+
+    fn generate_fn_output(
+        &self,
+        name_db: &Ident,
+        input: TokenStream,
+        original: TokenStream,
+    ) -> TokenStream {
+        if self.error_kinds.is_empty() {
+            return original;
+        }
+
+        let ident_error = format_ident!("{}Error", name_db);
+        quote! {
+            Result<#original, #ident_error<#input>>
+        }
+    }
+
+    fn generate_fn_kind_output(&self, name_db: &Ident, original: TokenStream) -> TokenStream {
+        if self.error_kinds.is_empty() {
+            return original;
+        }
+
+        let ident_error_kind = format_ident!("{}ErrorKind", name_db);
+        quote! {
+            Result<#original, #ident_error_kind>
+        }
+    }
+
+    fn generate_definitions(&self, name_db: &Ident, vis: &syn::Visibility) -> TokenStream {
+        if self.error_kinds.is_empty() {
+            return TokenStream::new();
+        }
+
+        let ident_error = format_ident!("{}Error", name_db);
+        let ident_error_kind = format_ident!("{}Kind", ident_error);
+        let ident_error_debug = format!("{}", ident_error);
+
+        let error_kinds = &self.error_kinds;
+
+        quote! {
+            #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+            #vis enum #ident_error_kind {
+                #(#error_kinds)*
+            }
+
+            #vis struct #ident_error<T> {
+                kind: #ident_error_kind,
+                input: T,
+                row_index: usize,
+            }
+
+            impl<T> ::std::fmt::Debug for #ident_error<T> {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    f.debug_struct(#ident_error_debug)
+                        .field("kind", &self.kind)
+                        .field("row_index", &self.row_index)
+                        .finish()
+                }
+            }
+
+            impl<T> #ident_error<T> {
+                fn new(kind: #ident_error_kind, input: T, row_index: usize) -> Self {
+                    Self {
+                        kind,
+                        input,
+                        row_index,
+                    }
+                }
+
+                #vis fn kind(&self) -> #ident_error_kind {
+                        self.kind
+                }
+
+                #vis fn input(&self) -> &T {
+                    &self.input
+                }
+
+                #vis fn into_input(self) -> T {
+                    self.input
+                }
+
+                #vis fn row_index(&self) -> usize {
+                    self.row_index
+                }
+            }
+
+            impl<T> ::std::fmt::Display for #ident_error<T> {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    write!(f, "{}: {:?}", #ident_error_debug, self.kind)
+                }
+            }
+
+            impl<T> ::std::error::Error for #ident_error<T> {}
         }
     }
 }
