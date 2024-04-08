@@ -43,6 +43,23 @@ Do let us know in case you use it as well in your project, such that we can asse
 
 💬 Come join us at [Discord][discord-url] on the `#venndb` public channel. To ask questions, discuss ideas and ask how venndb may be useful for you.
 
+## Usage
+
+Add `venndb` as a dependency:
+
+```sh
+cargo add venndb
+```
+
+and import the `derive` macro in the module where you want to use it:
+
+```rust,ignore
+use venndb::VennDB
+```
+
+See [the example](#example) or [the "Generated Code Summary" chapter](#generated-code-summary) below
+to learn how to use the `VennDB` and its generated code.
+
 ## Example
 
 Here follows an example demonstrating all the features of `VennDB`.
