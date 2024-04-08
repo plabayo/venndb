@@ -305,6 +305,7 @@ The following public-API datastructures will be generated:
 - `enum EmployeeInMemDBErrorKind`: the kind of error that can happen as described for `EmployeeInMemDBError`;
 - `struct EmployeeInMemDBQuery`: the query builder that is used to build a query that can be `execute`d to query data from the db using filters;
 - `struct EmployeeInMemDBQueryResult`: the result when querying using `EmployeeInMemDBQuery` and at least one row was found that matched the defined filters;
+- `struct EmployeeInMemDBQueryResultIter`: the iterator type that is used when calling `EmployeeInMemDBQueryResult::iter`. It has no methods/api other then the fact that it is an `Iterator` and can be used as one;
 
 The visual specifiers of these datastructures will be the same as the `struct` that the `VennDB` macro is applied to.
 E.g. in this example `Employee` has a specifier of `pub` so the above datastructures and their public-apy methods will also be `pub`.
@@ -325,8 +326,27 @@ Database: (e.g. `EmployeeInMemDB`):
 | `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | constructor to create the database directly from a heap-allocated list of data instances. The second version is the one used if at least one `#[venndb(key)]` property is defined, otherwise it is the first one (without the `Result`). |
 | `EmployeeInMemDB::from_iter(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | Same as `from_rows` but using an iterator instead. The items do not have to be an `Employee` but can be anything that can be turned into one. E.g. in our example above we defined a struct `RawCsvRow` that was turned on the fly into an `Employee`. This happens all at once prior to inserting the database, which is why the version with a result does return a `Vec` and not an iterator. |
 | `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>)` or `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>) -> Result<(), EmployeeInMemDBError<Employee>>` | append a single row to the database. Depending on whether or not a `#[venndb(key)]` property is defined it will generate the `Result` version or not. Same as `from_rows` and `from_iter` |
+| `EmployeeInMemDB::extend<I, Item>(&mut self, iter: I) where I: ::std::iter::IntoIterator<Item = Item>, Item: ::std::convert::Into<Employee>` or `EmployeeInMemDB::extend<I, Item>(&mut self, iter: I) -> Result<(), EmployeeInMemDBError<(Employee, I::IntoIter)>> where I: ::std::iter::IntoIterator<Item = Item>, Item: ::std::convert::Into<Employee>` | extend the database with the given iterator, once again returning a result in case such insertion can go wrong (e.g. because keys are used (duplication)). Otherwise this function will return nothing. |
 | `EmployeeInMemDB::get_by_id<Q>(&self, data: impl ::std::convert::Into<Employee>) -> Option<&Employee> where Employee ::std::borrow::Borrow<Q>, Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized` | look up a row by the `id` key property. This method will be generated for each property marked with `#[venndb(key)`. e.g. if you have key property named `foo: MyType` property there will be also a `get_by_foo(&self, ...)` method generated. |
 | `EmployeeInMemDB::query(&self) -> EmployeeInMemDBQuery` | create a `EmployeeInMemDBQuery` builder to compose a filter composition to query the database. The default builder will match all rows. See the method API for `EmployeeInMemDBQuery` for more information |
+
+Query (e.g. `EmployeeInMemDBQuery`)
+
+| fn signature | description |
+| - | - |
+| `EmployeeInMemDBQuery::reset(&mut self) -> &mut Self` | reset the query, bringing it back to the clean state it has on creation |
+| `EmployeeInMemDBQuery::execute(&self) -> Option<EmployeeInMemDBQueryResult<'a>>` | return the result of the query using the set filters. It will be `None` in case no rows matched the defined filters. Or put otherwise, the result will contain at least one row when `Some(_)` is returned. |
+| `EmployeeInMemDBQuery::is_manager(&mut self, value: bool) -> &mut Self` | a filter setter for a `bool` filter. One such method per `bool` filter (that isn't `skip`ped) will be available. E.g. if you have ` foo` filter then there will be a `EmployeeInMemDBQuery:foo` method. |
+| `EmployeeInMemDBQuery::department(&mut self, value: Department) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. |
+
+Query Result (e.g. `EmployeeInMemDBQueryResult`)
+
+| fn signature | description |
+| - | - |
+| `EmployeeInMemDBQueryResult::first(&self) -> &Employee` | return a reference to the first matched employee found. An implementation detail is that this will be the matched row that was first inserted, but for compatibility reasons you best not rely on this if you do not have to. |
+| `EmployeeInMemDBQueryResult::any(&self) -> &Employee` | return a reference to a randomly selected matched employee. The randomness can be relied upon to be fair.  |
+| `EmployeeInMemDBQueryResult::iter(&self) -> `EmployeeInMemDBQueryResultIter` | return an iterator for the query result, which will allow you to iterate over all found results, and as such also collect them into an owned data structure should you wish. |
+| `EmployeeInMemDBQueryResult::filter<F>(&self, predicate: F) -> Option<#EmployeeInMemDBQueryResult> where F: Fn(&#name) -> bool` | return `Some(_)` `EmployeeInMemDBQueryResult` with the same reference data, but containing (and owning) only the indexes for which the linked row matches arcoding to the given `Fn` predicate |
 
 ## ⛨ | Safety
 
