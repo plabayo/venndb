@@ -443,4 +443,86 @@ mod tests {
 
         assert!(results.filter(|r| r.is_admin).is_none());
     }
+
+    #[test]
+    fn test_db_filter_map() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 3,
+                name: "Charlie".to_string(),
+                is_manager: true,
+                is_admin: true,
+                is_active: true,
+                department: Department::Sales,
+            },
+            Employee {
+                id: 4,
+                name: "David".to_string(),
+                is_manager: false,
+                is_admin: true,
+                is_active: true,
+                department: Department::HR,
+            },
+            Employee {
+                id: 5,
+                name: "Eve".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::HR,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Marketing);
+        assert!(query.execute().is_none());
+
+        query.reset().department(Department::Engineering);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 2);
+
+        query.reset().department(Department::HR);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 4);
+        assert_eq!(results[1].id, 5);
+
+        query.reset().department(Department::Sales);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, 3);
+
+        // all the filters
+        let results = query
+            .reset()
+            .department(Department::Engineering)
+            .is_manager(true)
+            .is_admin(false)
+            .is_active(true)
+            .execute()
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, 1);
+    }
 }

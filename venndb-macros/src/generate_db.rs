@@ -337,11 +337,11 @@ fn generate_db_struct_method_append(
                     let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
                         ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
                         ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
-                            let index = self.#filter_vec_name.len();
-                            entry.insert(index);
-                            let bv = ::venndb::__internal::BitVec::repeat(false, self.rows.len());
+                            let vec_index = self.#filter_vec_name.len();
+                            entry.insert(vec_index);
+                            let bv = ::venndb::__internal::BitVec::repeat(false, index);
                             self.#filter_vec_name.push(bv);
-                            index
+                            vec_index
                         }
                     };
                     for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
