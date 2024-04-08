@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       Cannot have both `key` and `filter`
+ --> tests/fails/filter_and_key.rs:8:22
+  |
+8 |     #[venndb(filter, key)]
+  |                      ^^^

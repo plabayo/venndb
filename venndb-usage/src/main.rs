@@ -11,10 +11,11 @@ pub struct Employee {
     is_manager: bool,
     is_admin: bool,
     is_active: bool,
+    #[venndb(filter)]
     department: Department,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Department {
     Engineering,
     Sales,

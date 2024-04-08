@@ -11,6 +11,7 @@ pub struct FieldAttrs {
 pub enum FieldKind {
     Key,
     Filter,
+    FilterMap,
 }
 
 impl FieldAttrs {
@@ -19,28 +20,54 @@ impl FieldAttrs {
 
         let mut skipped = false;
         let mut is_key = false;
+        let mut is_filter = false;
 
         for attr in &field.attrs {
-            let ml = if let Some(ml) = venndb_attr_to_meta_list(errors, attr) {
-                ml
+            let ml: Vec<_> = if let Some(ml) = venndb_attr_to_meta_list(errors, attr) {
+                ml.into_iter().collect()
             } else {
                 continue;
             };
 
-            for meta in ml {
-                let name = meta.path();
-                if name.is_ident("key") {
-                    is_key = true;
-                } else if name.is_ident("skip") {
-                    skipped = true;
-                } else {
-                    errors.err(
-                        &meta,
-                        concat!(
-                            "Invalid field-level `venndb` attribute\n",
-                            "Expected one of: `key`",
-                        ),
-                    );
+            if ml.iter().any(|meta| meta.path().is_ident("skip")) {
+                // check first to avoid any other invalid combinations
+                skipped = true;
+            } else {
+                for meta in ml {
+                    let name = meta.path();
+                    if name.is_ident("key") {
+                        if is_filter {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Cannot have both `key` and `filter`",
+                                ),
+                            );
+                        } else {
+                            is_key = true;
+                        }
+                    } else if name.is_ident("filter") {
+                        if is_key {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Cannot have both `key` and `filter`",
+                                ),
+                            );
+                        } else {
+                            is_filter = true;
+                        }
+                    } else {
+                        errors.err(
+                            &meta,
+                            concat!(
+                                "Invalid field-level `venndb` attribute\n",
+                                "Expected one of: `key`",
+                            ),
+                        );
+                    }
                 }
             }
         }
@@ -51,6 +78,9 @@ impl FieldAttrs {
             this.kind = Some(FieldKind::Key);
         } else if is_bool(&field.ty) {
             this.kind = Some(FieldKind::Filter);
+        } else if is_filter {
+            // bool filters are to be seen as regular filters, even when made explicitly so!
+            this.kind = Some(FieldKind::FilterMap);
         }
 
         this

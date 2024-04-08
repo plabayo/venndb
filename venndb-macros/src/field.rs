@@ -24,6 +24,7 @@ pub struct StructField<'a> {
 pub enum FieldInfo<'a> {
     Key(KeyField<'a>),
     Filter(FilterField<'a>),
+    FilterMap(FilterMapField<'a>),
 }
 
 pub struct KeyField<'a> {
@@ -83,6 +84,33 @@ impl<'a> StructField<'a> {
                 ty: &self.field.ty,
             }),
             FieldKind::Filter => FieldInfo::Filter(FilterField { name: self.name }),
+            FieldKind::FilterMap => FieldInfo::FilterMap(FilterMapField {
+                name: self.name,
+                ty: &self.field.ty,
+            }),
         })
+    }
+}
+
+pub struct FilterMapField<'a> {
+    pub name: &'a Ident,
+    pub ty: &'a syn::Type,
+}
+
+impl<'a> FilterMapField<'a> {
+    pub fn name(&'a self) -> &'a Ident {
+        self.name
+    }
+
+    pub fn ty(&'a self) -> &'a syn::Type {
+        self.ty
+    }
+
+    pub fn filter_map_name(&self) -> Ident {
+        format_ident!("filter_map_{}", self.name)
+    }
+
+    pub fn filter_vec_name(&self) -> Ident {
+        format_ident!("filter_vec_{}", self.name)
     }
 }

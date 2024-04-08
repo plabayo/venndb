@@ -6,14 +6,16 @@ struct Employee {
     #[venndb(key)]
     id: u32,
     name: String,
+    #[venndb(filter)] // explicit bool filter == regular bool
     is_manager: bool,
     is_admin: bool,
     #[venndb(skip)]
     is_active: bool,
+    #[venndb(filter)]
     department: Department,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Department {
     Engineering,
     Sales,
@@ -30,7 +32,8 @@ fn main() {
         is_admin: false,
         is_active: true,
         department: Department::Engineering,
-    }).unwrap();
+    })
+    .unwrap();
 
     let employee_ref = db.get_by_id(&1).unwrap();
     assert_eq!(employee_ref.id, 1);

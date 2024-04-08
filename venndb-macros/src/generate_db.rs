@@ -56,6 +56,15 @@ fn generate_db_struct(
                     #field_name_not: ::venndb::__internal::BitVec,
                 }
             }
+            FieldInfo::FilterMap(field) => {
+                let filter_map_name = field.filter_map_name();
+                let filter_vec_name = field.filter_vec_name();
+                let ty: &syn::Type = field.ty();
+                quote! {
+                    #filter_map_name: ::venndb::__internal::HashMap<#ty, usize>,
+                    #filter_vec_name: ::std::vec::Vec<::venndb::__internal::BitVec>,
+                }
+            }
         })
         .collect();
 
@@ -122,7 +131,7 @@ fn generate_db_struct_methods(
             #method_append
 
             /// Consumes the database and returns the rows.
-            #vis fn into_rows(self) -> Vec<#name> {
+            #vis fn into_rows(self) -> ::std::vec::Vec<#name> {
                 self.rows
             }
         }
@@ -155,6 +164,14 @@ fn generate_db_struct_method_new(
                 quote! {
                     #name: ::venndb::__internal::BitVec::new(),
                     #name_not: ::venndb::__internal::BitVec::new(),
+                }
+            }
+            FieldInfo::FilterMap(field) => {
+                let filter_map_name = field.filter_map_name();
+                let filter_vec_name = field.filter_vec_name();
+                quote! {
+                    #filter_map_name: ::venndb::__internal::HashMap::new(),
+                    #filter_vec_name: ::std::vec::Vec::new(),
                 }
             }
         })
@@ -199,6 +216,14 @@ fn generate_db_struct_method_with_capacity(
                     #name_not: ::venndb::__internal::BitVec::with_capacity(capacity),
                 }
             }
+            FieldInfo::FilterMap(field) => {
+                let filter_map_name = field.filter_map_name();
+                let filter_vec_name = field.filter_vec_name();
+                quote! {
+                    #filter_map_name: ::venndb::__internal::HashMap::with_capacity(capacity),
+                    #filter_vec_name: ::std::vec::Vec::with_capacity(capacity),
+                }
+            }
         })
         .collect();
 
@@ -225,7 +250,8 @@ fn generate_db_struct_method_from_rows(
         name
     );
 
-    let return_type = db_error.generate_fn_output(name_db, quote! { Vec<#name> }, quote! { Self });
+    let return_type =
+        db_error.generate_fn_output(name_db, quote! { ::std::vec::Vec<#name> }, quote! { Self });
     let append_internal_call = db_error.generate_fn_error_kind_usage(
         name_db,
         quote! {
@@ -239,7 +265,7 @@ fn generate_db_struct_method_from_rows(
 
     quote! {
         #[doc=#method_doc]
-        #vis fn from_rows(rows: Vec<#name>) -> #return_type {
+        #vis fn from_rows(rows: ::std::vec::Vec<#name>) -> #return_type {
             let mut db = Self::with_capacity(rows.len());
             for (index, row) in rows.iter().enumerate() {
                 #append_internal_call
@@ -278,6 +304,7 @@ fn generate_db_struct_method_append(
                 })
             }
             FieldInfo::Filter(_) =>  None,
+            FieldInfo::FilterMap(_) => None,
         })
         .collect();
 
@@ -299,6 +326,27 @@ fn generate_db_struct_method_append(
                 quote! {
                     self.#field_name.push(data.#name);
                     self.#field_name_not.push(!data.#name);
+                }
+            }
+            FieldInfo::FilterMap(field) => {
+                let name = field.name();
+                let filter_map_name = field.filter_map_name();
+                let filter_vec_name = field.filter_vec_name();
+                let filter_index = format_ident!("{}_index", filter_vec_name);
+                quote! {
+                    let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
+                        ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
+                        ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
+                            let index = self.#filter_vec_name.len();
+                            entry.insert(index);
+                            let bv = ::venndb::__internal::BitVec::repeat(false, self.rows.len());
+                            self.#filter_vec_name.push(bv);
+                            index
+                        }
+                    };
+                    for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
+                        row.push(i == #filter_index);
+                    }
                 }
             }
         })
@@ -364,6 +412,7 @@ fn generate_db_struct_field_methods(
                 })
             }
             FieldInfo::Filter(_) => None,
+            FieldInfo::FilterMap(_) => None,
         })
         .collect();
 
@@ -389,6 +438,13 @@ fn generate_query_struct(
                     #name: Option<bool>,
                 })
             }
+            FieldInfo::FilterMap(field) => {
+                let name = field.name();
+                let ty = field.ty();
+                Some(quote! {
+                    #name: Option<#ty>,
+                })
+            }
             FieldInfo::Key(_) => None,
         })
         .collect();
@@ -401,6 +457,12 @@ fn generate_query_struct(
         .iter()
         .filter_map(|info| match info {
             FieldInfo::Filter(field) => {
+                let name = field.name();
+                Some(quote! {
+                    #name: None,
+                })
+            }
+            FieldInfo::FilterMap(field) => {
                 let name = field.name();
                 Some(quote! {
                     #name: None,
@@ -471,6 +533,21 @@ fn generate_query_struct_impl(
                     }
                 })
             }
+            FieldInfo::FilterMap(field) => {
+                let name = field.name();
+                let ty = field.ty();
+                let doc = format!(
+                    "Enable and set the `{}` filter-map with the given option.",
+                    name
+                );
+                Some(quote! {
+                    #[doc=#doc]
+                    #vis fn #name(&mut self, value: #ty) -> &mut Self {
+                        self.#name = Some(value);
+                        self
+                    }
+                })
+            }
             FieldInfo::Key(_) => None,
         })
         .collect();
@@ -479,6 +556,12 @@ fn generate_query_struct_impl(
         .iter()
         .filter_map(|info| match info {
             FieldInfo::Filter(field) => {
+                let name = field.name();
+                Some(quote! {
+                    self.#name = None;
+                })
+            }
+            FieldInfo::FilterMap(field) => {
                 let name = field.name();
                 Some(quote! {
                     self.#name = None;
@@ -501,6 +584,19 @@ fn generate_query_struct_impl(
                         Some(false) => filter &= &self.db.#filter_not_name,
                         None => (),
                     };
+                })
+            }
+            FieldInfo::FilterMap(field) => {
+                let name = field.name();
+                let filter_map_name: Ident = field.filter_map_name();
+                let filter_vec_name: Ident = field.filter_vec_name();
+                Some(quote! {
+                    if let Some(value) = &self.#name {
+                        match self.db.#filter_map_name.get(value) {
+                            Some(index) => filter &= &self.db.#filter_vec_name[*index],
+                            None => filter.fill(false),
+                        };
+                    }
                 })
             }
             FieldInfo::Key(_) => None,
@@ -550,7 +646,7 @@ fn generate_query_struct_impl(
 
             /// Execute the query on the database, returning an iterator over the results.
             #vis fn execute(&self) -> Option<#name_query_result<'a>> {
-                let mut filter = ::venndb::__internal::bitvec![1; self.db.rows.len()];
+                let mut filter = ::venndb::__internal::BitVec::repeat(true, self.db.rows.len());
 
                 #(#filters)*
 
@@ -575,7 +671,7 @@ fn generate_query_struct_impl(
         #[derive(Debug)]
         enum #name_query_result_kind {
             Bits(::venndb::__internal::BitVec),
-            Indices(Vec<usize>),
+            Indices(::std::vec::Vec<usize>),
         }
 
         impl<'a> #name_query_result<'a> {
@@ -619,7 +715,7 @@ fn generate_query_struct_impl(
                 where
                     F: Fn(&#name) -> bool,
             {
-                let indices: Vec<usize> = match &self.references {
+                let indices: ::std::vec::Vec<usize> = match &self.references {
                     #name_query_result_kind::Bits(v) => v.iter_ones().filter(|index| predicate(&self.rows[*index])).collect(),
                     #name_query_result_kind::Indices(i) => i.iter().filter(|&index| predicate(&self.rows[*index])).map(|index| *index).collect(),
                 };
