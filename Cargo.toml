@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "venndb-macros", "venndb-usage"]
+members = [".", "fuzz", "venndb-macros", "venndb-usage"]
 
 [package]
 description = "an in-memory database in Rust for rows queried using bit (flag) columns"

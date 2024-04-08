@@ -37,3 +37,9 @@ watch-docs:
 
 watch-check:
 	cargo watch -x check -x test
+
+fuzz:
+	cargo +nightly fuzz run fuzz_employee_db
+
+fuzz-30s:
+	cargo +nightly fuzz run fuzz_employee_db -- -max_total_time=30

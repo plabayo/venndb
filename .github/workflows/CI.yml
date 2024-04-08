@@ -3,6 +3,7 @@ name: CI
 env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: stable
+  RUST_TOOLCHAIN_NIGHTLY: nightly
   RUST_TOOLCHAIN_MSRV: 1.75.0
   RUST_TOOLCHAIN_BETA: beta
 
@@ -328,15 +329,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
-
-  # semver-checks:
-  #   needs: [check, check-msrv]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #     - name: Check semver
-  #       uses: obi1kenobi/cargo-semver-checks-action@v2
-  #       with:
-  #         rust-toolchain: ${{env.RUST_TOOLCHAIN}}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${{env.RUST_TOOLCHAIN_NIGHTLY}}
+      - name: Install cargo-fuzz
+        run: |
+          cargo install cargo-fuzz
+      - name: cargo fuzz check
+        run: |
+          cargo fuzz run -max-total-time=30 fuzz_employee_db
