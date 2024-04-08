@@ -55,10 +55,59 @@ and import the `derive` macro in the module where you want to use it:
 
 ```rust,ignore
 use venndb::VennDB
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+    #[venndb(key)]
+    id: u32,
+    name: String,
+    is_manager: bool,
+    is_admin: bool,
+    #[venndb(skip)]
+    foo: bool,
+    #[venndb(filter)]
+    department: Department,
+}
+
+fn main() {
+    let db = EmployeeDB::from_iter(/* .. */);
+
+    let mut query = db.query();
+    let employee = query
+        .is_admin(true)
+        .is_manager(false)
+        .department(Department::Engineering)
+        .execute()
+        .expect("to have found at least one")
+        .any();
+
+    println!("non-manager admin engineer: {:?}", employee);
+}
 ```
 
-See [the example](#example) or [the "Generated Code Summary" chapter](#generated-code-summary) below
+See [the full example](#example) or [the "Generated Code Summary" chapter](#generated-code-summary) below
 to learn how to use the `VennDB` and its generated code.
+
+## Q&A
+
+> ❓ Why use this over Database X?
+
+`venndb` is not a database, but is close enough for some specific purposes. It shines for long-lived read-only use cases where you need to filter on plenty of binary properties and get a rando mmatching result.
+
+Do not try to replace your usual database needs with it.
+
+> ❓ Where can I propose a new feature X or some other improvement?
+
+Please [open an issue](https://github.com/plabayo/venndb/issues) and also read [the Contribution guidelines](#contribution). We look forward to hear from you.
+
+Alternatively you can also [join our Discord][discord-url] and start a conversation / discussion over there.
+
+> ❓ Can I use _any_ type for a `#[venndb(filter)]` property?
+
+Yes, as long as it implements `PartialEq + Eq + Hash + Clone`.
+That said, we do recomment that you use `enum` values if you can, or some other highly restricted form.
+
+Using for example a `String` directly is a bad idea as that would mean that `bE` != `Be` != `BE` != `Belgium` != `Belgique` != `België`. Even though these are really referring all to the same country. In such cases a much better idea is to at the very least create a wrapper type such as `struct Country(String)`, to allow you to enforce sanitization/validation when creating the value and ensuring the hashes will be the same for those values that are conceptually the same.
 
 ## Example
 
