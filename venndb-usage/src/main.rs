@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_key_with_zero_polution() {
+    fn test_duplicate_key_with_zero_pollution() {
         #[derive(Debug, VennDB)]
         struct MultiKey {
             #[venndb(key)]
@@ -234,7 +234,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(MultiKeyDBErrorKind::DuplicateKey, err.kind());
 
-        // ensure there was no polution,
+        // ensure there was no pollution,
         // this will panic in ase there was
         assert!(db.get_by_a("foo").is_none());
         assert!(db.get_by_b("bar").is_none());

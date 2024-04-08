@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub use venndb_macros::VennDB;
 
 #[doc(hidden)]

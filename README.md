@@ -1,4 +1,14 @@
-![venndb banner](./docs/img/banner.svg)
+# VennDB
+
+An **append-only** in-memory database in Rust for rows queried using bit (flag) columns.
+This database is designed for a very specific use case where you have mostly static data that you typically load at startup and have to query constantly using very simple filters. Datasets
+like these can be large and should be both fast and compact.
+
+This project was developed originally in function of [`rama`](https://ramaproxy.org),
+where you can see it being used for example to provide an in-memory (upstream) proxy database.
+Do let us know in case you use it as well in your project, such that we can assemble a showcase list.
+
+![venndb banner](https://raw.githubusercontent.com/plabayo/venndb/main/docs/img/banner.svg)
 
 [![Crates.io][crates-badge]][crates-url]
 [![Docs.rs][docs-badge]][docs-url]
@@ -31,19 +41,275 @@
 [ghs-badge]: https://img.shields.io/badge/sponsor-30363D?style=for-the-badge&logo=GitHub-Sponsors&logoColor=#EA4AAA
 [ghs-url]: https://github.com/sponsors/plabayo
 
-An in-memory database in Rust for rows queried using bit (flag) columns.
-This database is designed for a very specific use case where you have mostly static data that you typically load at startup and have to query constantly using very simple filters. Datasets
-like these can be large and should be both fast and compact.
-
-This project was developed originally in function of [`rama`](https://ramaproxy.org),
-where you can see it being used for example to provide an in-memory (upstream) proxy database.
-Do let us know in case you use it as well in your project, such that we can assemble a showcase list.
-
 💬 Come join us at [Discord][discord-url] on the `#venndb` public channel. To ask questions, discuss ideas and ask how venndb may be useful for you.
 
-> ⚠️ venndb is early work in progress, use at your own risk.
->
-> Not everything that exists is documented and not everything that is documented is implemented.
+## Example
+
+Here follows an example demonstrating all the features of `VennDB`.
+
+If you prefer a summary of what is generated, or do not understand something from the example below,
+you can also read [the "Generated Code Summary" chapter](#generated-code-summary) below.
+
+```rust
+use itertools::Itertools;
+use venndb::VennDB;
+
+#[derive(Debug, VennDB)]
+// These attributes are optional,
+// e.g. by default the database would be called `EmployeeDB` (name + 'DB').
+#[venndb(name = "EmployeeInMemDB")]
+pub struct Employee {
+    // you can use the `key` arg to be able to get an `Employee` instance
+    // directly by this key. It will effectively establishing a mapping from key to a reference
+    // of that Employee in the database. As such keys have to have unique values,
+    // or else you get an error while appending / creating the DB.
+    //
+    // NOTE: keys do not only have to be unique, they also have to implement `Clone`!!
+    //
+    // A property cannot be a filter and a key at the same time,
+    // trying to do so will result in a compile-team failure.
+    #[venndb(key)]
+    id: u32,
+    name: String,
+    is_manager: bool,
+    is_admin: bool,
+    is_active: bool,
+    // booleans are automatically turned into (query) filters,
+    // use the `skip` arg to stop this. As such it is only really needed for
+    // bool properties :)
+    #[venndb(skip)]
+    foo: bool,
+    // non-bool values can also be turned into filters, turning them into 2D filters.
+    // For each uniquely inserted Department variant that is inserted,
+    // a new filter is kept track of. This allows you to apply a (query) filter
+    // based on department, a pretty useful thing to be able to do.
+    //
+    // NOTE: this does mean that such filter-map types have to also be:
+    // `PartialEq + Eq + Hash + Clone`!!
+    //
+    // A property cannot be a filter and a key at the same time,
+    // trying to do so will result in a compile-team failure.
+    #[venndb(filter)]
+    department: Department,
+}
+
+fn main() {
+    let db = EmployeeInMemDB::from_iter([
+        RawCsvRow("1,John Doe,true,false,true,false,Engineering"),
+        RawCsvRow("2,Jane Doe,false,true,true,true,Sales"),
+        RawCsvRow("3,John Smith,false,false,true,false,Marketing"),
+        RawCsvRow("4,Jane Smith,true,true,false,true,HR"),
+        RawCsvRow("5,John Johnson,true,true,true,true,Engineering"),
+        RawCsvRow("6,Jane Johnson,false,false,false,false,Sales"),
+        RawCsvRow("7,John Brown,true,false,true,false,Marketing"),
+        RawCsvRow("8,Jane Brown,false,true,true,true,HR"),
+    ])
+    .expect("MemDB created without errors (e.g. no duplicate keys)");
+
+    println!(">>> Printing all employees...");
+    let all_employees: Vec<_> = db.iter().collect();
+    assert_eq!(all_employees.len(), 8);
+    println!("All employees: {:#?}", all_employees);
+
+    println!(">>> You can lookup an employee by any registered key...");
+    let employee = db
+        .get_by_id(&2)
+        .expect("to have found an employee with ID 2");
+    assert_eq!(employee.name, "Jane Doe");
+
+    println!(">>> Querying for all managers...");
+    let mut query = db.query();
+    query.is_manager(true);
+    let managers: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(managers.len(), 4);
+    assert_eq!(
+        managers.iter().map(|e| e.id).sorted().collect::<Vec<_>>(),
+        [1, 4, 5, 7]
+    );
+
+    println!(">>> Querying for all managers with a last name of 'Johnson'...");
+    let managers_result = query
+        .execute()
+        .expect("to have found at least one")
+        .filter(|e| e.name.ends_with("Johnson"))
+        .expect("to have found a manager with a last name of Johnson");
+    let managers = managers_result.iter().collect::<Vec<_>>();
+    assert_eq!(managers.len(), 1);
+    assert_eq!(managers.iter().map(|e| e.id).collect::<Vec<_>>(), [5]);
+
+    println!(">>> You can also just get the first result if that is all you care about...");
+    let manager = managers_result.first();
+    assert_eq!(manager.id, 5);
+
+    println!(">>> Querying for a random active manager in the Engineering department...");
+    let manager = query
+        .reset()
+        .is_active(true)
+        .is_manager(true)
+        .department(Department::Engineering)
+        .execute()
+        .expect("to have found at least one")
+        .any();
+    assert!(manager.id == 1 || manager.id == 5);
+
+    println!(">>> If you want you can also get the Employees back as a Vec, dropping the DB data all together...");
+    let employees = db.into_rows();
+    assert_eq!(employees.len(), 8);
+
+    println!(">>> You can also get the DB back from the Vec, if you want start to query again...");
+    // of course better to just keep it as a DB to begin with, but let's pretend this is ok in this example
+    let mut db = EmployeeInMemDB::from_rows(employees).expect("DB created without errors");
+    assert_eq!(db.iter().count(), 8);
+
+    println!(">>> Querying for all active employees in the Sales department...");
+    let mut query = db.query();
+    query.is_active(true);
+    query.department(Department::Sales);
+    let sales_employees: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(sales_employees.len(), 1);
+    assert_eq!(sales_employees[0].name, "Jane Doe");
+
+    println!(">>> At any time you can also append new employees to the DB...");
+    assert!(db
+        .append(RawCsvRow("8,John Doe,true,false,true,false,Engineering"))
+        .is_err());
+    println!(">>> This will fail however if a property is not correct (e.g. ID (key) is not unique in this case), let's try this again...");
+    assert!(db
+        .append(RawCsvRow("9,John Doe,false,true,true,false,Engineering"))
+        .is_ok());
+    assert_eq!(db.len(), 9);
+
+    println!(">>> This new employee can now also be queried for...");
+    let mut query = db.query();
+    query.department(Department::Engineering).is_manager(false);
+    let new_employee: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(new_employee.len(), 1);
+    assert_eq!(new_employee[0].id, 9);
+
+    println!(">>> All previously data is still there as well of course...");
+    query
+        .reset()
+        .is_active(true)
+        .is_manager(true)
+        .department(Department::Engineering);
+    let managers: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(managers.len(), 2);
+    assert_eq!(
+        managers.iter().map(|e| e.id).sorted().collect::<Vec<_>>(),
+        [1, 5]
+    );
+}
+
+#[derive(Debug)]
+struct RawCsvRow<S>(S);
+
+impl<S> From<RawCsvRow<S>> for Employee
+where
+    S: AsRef<str>,
+{
+    fn from(RawCsvRow(s): RawCsvRow<S>) -> Employee {
+        let mut parts = s.as_ref().split(',');
+        Employee {
+            id: parts.next().unwrap().parse().unwrap(),
+            name: parts.next().unwrap().to_string(),
+            is_manager: parts.next().unwrap().parse().unwrap(),
+            is_admin: parts.next().unwrap().parse().unwrap(),
+            is_active: parts.next().unwrap().parse().unwrap(),
+            foo: parts.next().unwrap().parse().unwrap(),
+            department: parts.next().unwrap().parse().unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum Department {
+    Engineering,
+    Sales,
+    Marketing,
+    HR,
+}
+
+impl std::str::FromStr for Department {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Engineering" => Ok(Department::Engineering),
+            "Sales" => Ok(Department::Sales),
+            "Marketing" => Ok(Department::Marketing),
+            "HR" => Ok(Department::HR),
+            _ => Err(()),
+        }
+    }
+}
+```
+
+### Generated Code Summary
+
+In this chapter we'll list the API as generated by `VennDB` for the following example code from above:
+
+```rust,ignore
+#[derive(Debug, VennDB)]
+#[venndb(name = "EmployeeInMemDB")]
+pub struct Employee {
+    #[venndb(key)]
+    id: u32,
+    name: String,
+    is_manager: bool,
+    is_admin: bool,
+    is_active: bool,
+    #[venndb(skip)]
+    foo: bool,
+    #[venndb(filter)]
+    department: Department,
+}
+```
+
+The following public-API datastructures will be generated:
+
+- `struct EmployeeInMemDB`: the database, that can be used to query (by filters) or look up data (by keys);
+- `enum EmployeeInMemDBError`: the error type that is returned when mutating the DB and a property of the to be inserted row;
+- `enum EmployeeInMemDBErrorKind`: the kind of error that can happen as described for `EmployeeInMemDBError`;
+- `struct EmployeeInMemDBQuery`: the query builder that is used to build a query that can be `execute`d to query data from the db using filters;
+- `struct EmployeeInMemDBQueryResult`: the result when querying using `EmployeeInMemDBQuery` and at least one row was found that matched the defined filters;
+
+The visual specifiers of these datastructures will be the same as the `struct` that the `VennDB` macro is applied to.
+E.g. in this example `Employee` has a specifier of `pub` so the above datastructures and their public-apy methods will also be `pub`.
+
+There are also some other helper datastructures generated — all prefixed with the database name, e.g. `EmployeeInMemDB` in this example —
+but we do not mention here as they should not be relied upon and given the prefix it should cause no conflict.
+In case you do not want to expose these structures to the outside you can wrap your `struct` within its own `mod` (module).
+
+#### Generated Code Summary: Method API
+
+Database: (e.g. `EmployeeInMemDB`):
+
+| fn signature | description |
+| - | - |
+| `EmployeeInMemDB::new() -> EmployeeInMemDB` | create a new database with zero capacity |
+| `EmployeeInMemDB::default() -> EmployeeInMemDB` | same as `EmployeeInMemDB::new() -> EmployeeInMemDB` |
+| `EmployeeInMemDB::capacity(capacity: usize) -> EmployeeInMemDB` | create a new database with the given capacity, but no rows already inserted |
+| `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | constructor to create the database directly from a heap-allocated list of data instances. The second version is the one used if at least one `#[venndb(key)]` property is defined, otherwise it is the first one (without the `Result`). |
+| `EmployeeInMemDB::from_iter(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | Same as `from_rows` but using an iterator instead. The items do not have to be an `Employee` but can be anything that can be turned into one. E.g. in our example above we defined a struct `RawCsvRow` that was turned on the fly into an `Employee`. This happens all at once prior to inserting the database, which is why the version with a result does return a `Vec` and not an iterator. |
+| `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>)` or `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>) -> Result<(), EmployeeInMemDBError<Employee>>` | append a single row to the database. Depending on whether or not a `#[venndb(key)]` property is defined it will generate the `Result` version or not. Same as `from_rows` and `from_iter` |
+| `EmployeeInMemDB::get_by_id<Q>(&self, data: impl ::std::convert::Into<Employee>) -> Option<&Employee> where Employee ::std::borrow::Borrow<Q>, Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized` | look up a row by the `id` key property. This method will be generated for each property marked with `#[venndb(key)`. e.g. if you have key property named `foo: MyType` property there will be also a `get_by_foo(&self, ...)` method generated. |
+| `EmployeeInMemDB::query(&self) -> EmployeeInMemDBQuery` | create a `EmployeeInMemDBQuery` builder to compose a filter composition to query the database. The default builder will match all rows. See the method API for `EmployeeInMemDBQuery` for more information |
 
 ## ⛨ | Safety
 
@@ -135,4 +401,4 @@ allows you to rely on us for support and consulting.
 
 Finally, you can also support us by shopping Plabayo <3 `VennDB` merchandise 🛍️ at <https://plabayo.threadless.com/>.
 
-[![Plabayo's Store With VennDB Merchandise](./docs/img/plabayo_mech_store_venndb.png)](https://plabayo.threadless.com/)
+[![Plabayo's Store With VennDB Merchandise](https://raw.githubusercontent.com/plabayo/venndb/main/docs/img/plabayo_mech_store_venndb.png)](https://plabayo.threadless.com/)

@@ -12,6 +12,11 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 /// Derive macro generating VennDB functionality for this struct.
+///
+/// See <https://docs.rs/venndb> for more information on how to use it.
+/// Or check out the README and usage tests in [the repository][repo] of this macro.
+///
+/// [repo]: https://github.com/plabayo/venndb
 #[proc_macro_derive(VennDB, attributes(venndb))]
 pub fn venndb(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
