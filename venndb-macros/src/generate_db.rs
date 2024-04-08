@@ -299,6 +299,10 @@ fn generate_db_struct_method_append(
     fields: &[FieldInfo],
 ) -> TokenStream {
     let method_doc = format!("Append a new instance of [`{}`] to the database.", name);
+    let method_iter_doc = format!(
+        "Extend the database with the given iterator of items that can be turned into [`{}`] instances.",
+        name
+    );
 
     let db_field_insert_checks: Vec<_> = fields
         .iter()
@@ -368,6 +372,8 @@ fn generate_db_struct_method_append(
         .collect();
 
     let append_return_type = db_error.generate_fn_output(name_db, quote! { #name }, quote! { () });
+    let extend_return_type =
+        db_error.generate_fn_output(name_db, quote! { (#name, I::IntoIter) }, quote! { () });
     let append_kind_return_type = db_error.generate_fn_kind_output(name_db, quote! { () });
 
     let append_internal_call = db_error.generate_fn_error_kind_usage(
@@ -376,6 +382,14 @@ fn generate_db_struct_method_append(
             self.append_internal(&data, index)
         },
         quote! { data },
+    );
+
+    let extend_append_internal_call = db_error.generate_fn_error_kind_usage(
+        name_db,
+        quote! {
+            self.append_internal(&data, index)
+        },
+        quote! { (data, iter) },
     );
 
     let append_return_output = db_error.generate_fn_return_value_ok(quote! { () });
@@ -387,6 +401,23 @@ fn generate_db_struct_method_append(
             let data = data.into();
             #append_internal_call
             self.rows.push(data);
+            #append_return_output
+        }
+
+        #[doc=#method_iter_doc]
+        #vis fn extend<I, Item>(&mut self, iter: I) -> #extend_return_type
+            where
+                I: ::std::iter::IntoIterator<Item = Item>,
+                Item: ::std::convert::Into<#name>,
+        {
+            let mut index = self.rows.len();
+            let mut iter = iter.into_iter();
+            for item in &mut iter {
+                let data = item.into();
+                #extend_append_internal_call
+                self.rows.push(data);
+                index += 1;
+            }
             #append_return_output
         }
 
@@ -595,6 +626,10 @@ fn generate_query_struct_impl(
                 let filter_name: Ident = field.filter_name();
                 let filter_not_name: Ident = field.filter_not_name();
                 Some(quote! {
+                    // Filter by the filter below. Only if it is defined as Some(_).
+                    // Using negation if negation is desired, and
+                    // the regular filter otherwise.
+
                     match self.#name {
                         Some(true) => filter &= &self.db.#filter_name,
                         Some(false) => filter &= &self.db.#filter_not_name,
@@ -607,10 +642,14 @@ fn generate_query_struct_impl(
                 let filter_map_name: Ident = field.filter_map_name();
                 let filter_vec_name: Ident = field.filter_vec_name();
                 Some(quote! {
+                    // Filter by the filterm ap below, only if it is defined as Some(_).
+                    // If there is no filter matched to the given value then the search is over,
+                    // and we early return None.
+
                     if let Some(value) = &self.#name {
                         match self.db.#filter_map_name.get(value) {
                             Some(index) => filter &= &self.db.#filter_vec_name[*index],
-                            None => filter.fill(false),
+                            None => return None,
                         };
                     }
                 })

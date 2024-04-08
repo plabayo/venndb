@@ -116,6 +116,79 @@ mod tests {
     }
 
     #[test]
+    fn test_extend() {
+        let mut db = EmployeeDB::default();
+        assert_eq!(db.len(), 0);
+        assert!(db.get_by_id(&1).is_none());
+        assert!(db.get_by_id(&2).is_none());
+        assert!(db.is_empty());
+
+        db.extend(vec![
+            L1Engineer {
+                id: 1,
+                name: "Alice".to_string(),
+            },
+            L1Engineer {
+                id: 2,
+                name: "Bob".to_string(),
+            },
+        ])
+        .unwrap();
+        assert_eq!(db.len(), 2);
+
+        let employee: &Employee = db.get_by_id(&1).unwrap();
+        assert_eq!(employee.id, 1);
+        assert_eq!(employee.name, "Alice");
+
+        let employee: &Employee = db.get_by_id(&2).unwrap();
+        assert_eq!(employee.id, 2);
+        assert_eq!(employee.name, "Bob");
+    }
+
+    #[test]
+    fn test_extend_duplicate_key() {
+        let mut db = EmployeeDB::default();
+        db.extend(vec![
+            L1Engineer {
+                id: 1,
+                name: "Alice".to_string(),
+            },
+            L1Engineer {
+                id: 2,
+                name: "Bob".to_string(),
+            },
+        ])
+        .unwrap();
+        assert_eq!(db.len(), 2);
+
+        let err = db
+            .extend(vec![
+                L1Engineer {
+                    id: 2,
+                    name: "Charlie".to_string(),
+                },
+                L1Engineer {
+                    id: 3,
+                    name: "David".to_string(),
+                },
+            ])
+            .unwrap_err();
+        assert_eq!(EmployeeDBErrorKind::DuplicateKey, err.kind());
+
+        let (dup_employee, employee_iter) = err.into_input();
+        assert_eq!(dup_employee.id, 2);
+        assert_eq!(dup_employee.name, "Charlie");
+
+        let employees: Vec<_> = employee_iter.collect();
+        assert_eq!(employees.len(), 1);
+        assert_eq!(employees[0].id, 3);
+
+        db.extend(employees).unwrap();
+        assert_eq!(db.len(), 3);
+        assert_eq!(db.get_by_id(&3).unwrap().name, "David");
+    }
+
+    #[test]
     fn test_employee_query_filters() {
         let mut db = EmployeeDB::default();
 
@@ -279,6 +352,35 @@ mod tests {
     }
 
     #[test]
+    fn test_from_rows_duplicate_key() {
+        let err = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 1,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+        ])
+        .unwrap_err();
+        assert_eq!(EmployeeDBErrorKind::DuplicateKey, err.kind());
+
+        let employees = err.into_input();
+        assert_eq!(employees.len(), 2);
+        assert_eq!(employees[0].name, "Alice");
+        assert_eq!(employees[1].name, "Bob");
+    }
+
+    #[test]
     fn test_from_iter() {
         let db = EmployeeDB::from_iter([
             L1Engineer {
@@ -307,6 +409,27 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 1);
         assert_eq!(results[1].id, 2);
+    }
+
+    #[test]
+    fn test_from_iter_duplicate_key() {
+        let err = EmployeeDB::from_iter([
+            L1Engineer {
+                id: 1,
+                name: "Alice".to_string(),
+            },
+            L1Engineer {
+                id: 1,
+                name: "Bob".to_string(),
+            },
+        ])
+        .unwrap_err();
+        assert_eq!(EmployeeDBErrorKind::DuplicateKey, err.kind());
+
+        let employees = err.into_input();
+        assert_eq!(employees.len(), 2);
+        assert_eq!(employees[0].name, "Alice");
+        assert_eq!(employees[1].name, "Bob");
     }
 
     #[test]
