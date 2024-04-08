@@ -15,6 +15,25 @@ pub struct Employee {
     department: Department,
 }
 
+#[derive(Debug)]
+pub struct L1Engineer {
+    id: u32,
+    name: String,
+}
+
+impl From<L1Engineer> for Employee {
+    fn from(engineer: L1Engineer) -> Employee {
+        Employee {
+            id: engineer.id,
+            name: engineer.name,
+            is_manager: false,
+            is_admin: false,
+            is_active: true,
+            department: Department::Engineering,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Department {
     Engineering,
@@ -75,6 +94,25 @@ mod tests {
         let employee: &Employee = db.get_by_name("Alice").unwrap();
         assert_eq!(employee.id, 1);
         assert_eq!(employee.name, "Alice");
+    }
+
+    #[test]
+    fn test_append_into() {
+        let mut db = EmployeeDB::default();
+        db.append(L1Engineer {
+            id: 1,
+            name: "Alice".to_string(),
+        })
+        .unwrap();
+        assert_eq!(db.len(), 1);
+
+        let employee: &Employee = db.get_by_id(&1).unwrap();
+        assert_eq!(employee.id, 1);
+        assert_eq!(employee.name, "Alice");
+        assert!(!employee.is_manager);
+        assert!(!employee.is_admin);
+        assert!(employee.is_active);
+        assert_eq!(employee.department, Department::Engineering);
     }
 
     #[test]
@@ -238,6 +276,37 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].id, 1);
         assert_eq!(rows[1].id, 2);
+    }
+
+    #[test]
+    fn test_from_iter() {
+        let db = EmployeeDB::from_iter([
+            L1Engineer {
+                id: 1,
+                name: "Alice".to_string(),
+            },
+            L1Engineer {
+                id: 2,
+                name: "Bob".to_string(),
+            },
+        ])
+        .unwrap();
+
+        assert_eq!(db.len(), 2);
+        assert_eq!(db.capacity(), 2);
+
+        let mut query = db.query();
+        query.is_manager(true);
+        assert!(query.execute().is_none());
+
+        query
+            .reset()
+            .is_manager(false)
+            .department(Department::Engineering);
+        let results: Vec<_> = query.execute().unwrap().iter().collect();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 2);
     }
 
     #[test]

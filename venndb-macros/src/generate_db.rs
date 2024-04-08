@@ -250,6 +250,11 @@ fn generate_db_struct_method_from_rows(
         name
     );
 
+    let method_iter_doc = format!(
+        "Construct a new database from the given iterator of items that can be turned into [`{}`] instances.",
+        name
+    );
+
     let return_type =
         db_error.generate_fn_output(name_db, quote! { ::std::vec::Vec<#name> }, quote! { Self });
     let append_internal_call = db_error.generate_fn_error_kind_usage(
@@ -272,6 +277,16 @@ fn generate_db_struct_method_from_rows(
             }
             db.rows = rows;
             #fn_result
+        }
+
+        #[doc=#method_iter_doc]
+        #vis fn from_iter<I, Item>(iter: I) -> #return_type
+            where
+                I: ::std::iter::IntoIterator<Item = Item>,
+                Item: ::std::convert::Into<#name>,
+        {
+            let rows: ::std::vec::Vec<#name> = iter.into_iter().map(::std::convert::Into::into).collect();
+            Self::from_rows(rows)
         }
     }
 }
@@ -367,8 +382,9 @@ fn generate_db_struct_method_append(
 
     quote! {
         #[doc=#method_doc]
-        #vis fn append(&mut self, data: #name) -> #append_return_type {
+        #vis fn append(&mut self, data: impl ::std::convert::Into<#name>) -> #append_return_type {
             let index = self.rows.len();
+            let data = data.into();
             #append_internal_call
             self.rows.push(data);
             #append_return_output
