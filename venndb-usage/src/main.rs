@@ -126,7 +126,6 @@ mod tests {
 
     #[test]
     fn test_employee_duplicate_key() {
-        // TODO: replace with error instead of panic
         let mut db = EmployeeDB::default();
         db.append(Employee {
             id: 1,
@@ -396,5 +395,51 @@ mod tests {
         assert_eq!(iter.next().unwrap().id, 1);
         assert_eq!(iter.next().unwrap().id, 2);
         assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_db_result_filter() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.is_active(true);
+        let results = query.execute().unwrap();
+        let rows = results.iter().collect::<Vec<_>>();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, 1);
+        assert_eq!(rows[1].id, 2);
+
+        let results = results
+            .filter(|r| r.department == Department::Engineering)
+            .unwrap();
+        let rows = results.iter().collect::<Vec<_>>();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, 1);
+        assert_eq!(rows[1].id, 2);
+
+        let results = results.filter(|r| r.is_manager).unwrap();
+        let rows = results.iter().collect::<Vec<_>>();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, 1);
+
+        assert!(results.filter(|r| r.is_admin).is_none());
     }
 }
