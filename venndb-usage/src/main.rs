@@ -369,4 +369,32 @@ mod tests {
         assert_eq!(results[0].name, "Bob");
         assert_eq!(results[1].name, "Charlie");
     }
+
+    #[test]
+    fn test_db_iter() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+        ])
+        .unwrap();
+
+        let mut iter = db.iter();
+        assert_eq!(iter.next().unwrap().id, 1);
+        assert_eq!(iter.next().unwrap().id, 2);
+        assert!(iter.next().is_none());
+    }
 }

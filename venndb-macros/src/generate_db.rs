@@ -112,6 +112,11 @@ fn generate_db_struct_methods(
                 self.rows.is_empty()
             }
 
+            /// Return an iterator over the rows in the database.
+            #vis fn iter(&self) -> impl ::std::iter::Iterator<Item = &#name> {
+                self.rows.iter()
+            }
+
             #field_methods
 
             #method_append
@@ -414,6 +419,11 @@ fn generate_query_struct(
         name, name_db
     );
 
+    let query_method_doc = format!(
+        "Return a new [`{}`] for filtering instances of [`{}`].",
+        name_query, name
+    );
+
     quote! {
         #[doc=#query_doc]
         #[derive(Debug)]
@@ -434,6 +444,7 @@ fn generate_query_struct(
         #query_impl
 
         impl #name_db {
+            #[doc=#query_method_doc]
             #vis fn query(&self) -> #name_query {
                 #name_query::new(&self)
             }
@@ -512,6 +523,19 @@ fn generate_query_struct_impl(
         name, name_query
     );
 
+    let query_result_method_doc_first = format!(
+        "Return the first instance of [`{}`] found by the query.",
+        name
+    );
+    let query_result_method_doc_any = format!(
+        "Return a random instance of [`{}`] found by the query.",
+        name
+    );
+    let query_result_method_doc_iter = format!(
+        "Return an iterator over the instances of [`{}`] found by the query.",
+        name
+    );
+
     quote! {
         impl<'a> #name_query<'a> {
             #(#filter_setters)*
@@ -549,17 +573,20 @@ fn generate_query_struct_impl(
         }
 
         impl<'a> #name_query_result<'a> {
+            #[doc=#query_result_method_doc_first]
             #vis fn first(&self) -> &'a #name {
                 let index = self.v.iter_ones().next().expect("should contains at least one result");
                 &self.rows[index]
             }
 
+            #[doc=#query_result_method_doc_any]
             #vis fn any(&self) -> &'a #name {
                 let n = ::venndb::__internal::rand_usize() % self.v.count_ones();
                 let index = self.v.iter_ones().nth(n).unwrap();
                 &self.rows[index]
             }
 
+            #[doc=#query_result_method_doc_iter]
             #vis fn iter(&self) -> #name_query_result_iter<'a, '_> {
                 #name_query_result_iter {
                     rows: self.rows,
@@ -697,12 +724,27 @@ impl DbError {
 
         let error_kinds = &self.error_kinds;
 
+        let doc_error_kind = format!(
+            "The kind of error that occurred when appending a row to the [`{}`].",
+            name_db
+        );
+        let doc_error = format!(
+            "The error type that can be returned when appending a row to the [`{}`].",
+            name_db
+        );
+        let doc_error_kind_method = format!(
+            "The [`{}`] that occurred when appending a row to the [`{}`].",
+            ident_error_kind, name_db
+        );
+
         quote! {
             #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+            #[doc = #doc_error_kind]
             #vis enum #ident_error_kind {
                 #(#error_kinds)*
             }
 
+            #[doc = #doc_error]
             #vis struct #ident_error<T> {
                 kind: #ident_error_kind,
                 input: T,
@@ -719,6 +761,7 @@ impl DbError {
             }
 
             impl<T> #ident_error<T> {
+                /// Create a new error.
                 fn new(kind: #ident_error_kind, input: T, row_index: usize) -> Self {
                     Self {
                         kind,
@@ -727,18 +770,22 @@ impl DbError {
                     }
                 }
 
+                #[doc = #doc_error_kind_method]
                 #vis fn kind(&self) -> #ident_error_kind {
                         self.kind
                 }
 
+                /// Return a reference to the input that caused the error.
                 #vis fn input(&self) -> &T {
                     &self.input
                 }
 
+                /// Consume this error and return the input that caused the error.
                 #vis fn into_input(self) -> T {
                     self.input
                 }
 
+                /// Return the index of the row that caused the error.
                 #vis fn row_index(&self) -> usize {
                     self.row_index
                 }
