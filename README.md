@@ -4,6 +4,12 @@ An **append-only** in-memory database in Rust for rows queried using bit (flag) 
 This database is designed for a very specific use case where you have mostly static data that you typically load at startup and have to query constantly using very simple filters. Datasets
 like these can be large and should be both fast and compact.
 
+For the limited usecases where `venndb` can be applied to,
+ithas less dependencies and is faster then traditional choices,
+such as a naive implementation or a more heavy lifted dependency then _Sqlite_.
+
+> See [the benchmarks](#benchmarks) for more information on this topic.
+
 This project was developed originally in function of [`rama`](https://ramaproxy.org),
 where you can see it being used for example to provide an in-memory (upstream) proxy database.
 Do let us know in case you use it as well in your project, such that we can assemble a showcase list.
@@ -87,6 +93,92 @@ fn main() {
 
 See [the full example](#example) or [the "Generated Code Summary" chapter](#generated-code-summary) below
 to learn how to use the `VennDB` and its generated code.
+
+## Benchmarks
+
+Benchmarks displayed here are taken on a dev machine with following specs:
+
+```
+Macbook Pro — 16 inch (2023)
+Chip: Apple M2 Pro
+Memory: 16 GB
+OS: Sonoma 14.2
+```
+
+The benchmarks tests 3 different implementations of a proxy database
+
+- `venndb` version (very similar to [the example below](#example))
+- a `naive` version, which is just a `Vec<Proxy>`, over which is iterated
+- an `sqlite` version (using [the `sqlite` crate (version: `0.34.0`)](https://docs.rs/sqlite/0.34.0/sqlite/))
+
+The benchmarks are created by:
+
+1. running `just bench`
+2. copying the output into [./scripts/plot_bench_charts](./scripts/plot_bench_charts.py) and running it
+
+### Benchmark Performance Results
+
+Performance for Database with `100` records:
+
+| Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
+| --- | --- | --- | --- |
+| naive_proxy_db_100             | 6.87 | 7.48 | 19.16 |
+| sql_lite_proxy_db_100          | 34.16 | 36.33 | 78.04 |
+| venn_proxy_db_100              | 0.92 | 0.99 | 8.50 |
+
+Performance for Database with `12_500` records:
+
+| Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
+| --- | --- | --- | --- |
+| naive_proxy_db_12_500          | 402.20 | 407.60 | 434.30 |
+| sql_lite_proxy_db_12_500       | 1099.00 | 1182.00 | 1519.00 |
+| venn_proxy_db_12_500           | 16.79 | 17.54 | 23.16 |
+
+Performance for Database with `100_000` records:
+
+| Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
+| --- | --- | --- | --- |
+| naive_proxy_db_100_000         | 3769.00 | 3882.00 | 5285.00 |
+| sql_lite_proxy_db_100_000      | 8334.00 | 8628.00 | 10070.00 |
+| venn_proxy_db_100_000          | 128.30 | 136.50 | 152.10 |
+
+We are not database nor hardware experts though. Please do open an issue if you think
+these benchmarks are incorrect or if related improvements can be made.
+Contributions in the form of Pull requests are welcomed as well.
+
+See [the Contribution guidelines](#contribution) for more information.
+
+### Benchmark Allocations Results
+
+Allocations for Database with `100` records:
+
+| Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
+| --- | --- | --- | --- |
+| naive_proxy_db_100             | 0.38 | 0.38 | 0.38 |
+| sql_lite_proxy_db_100          | 4.53 | 4.53 | 4.53 |
+| venn_proxy_db_100              | 0.05 | 0.05 | 0.05 |
+
+Allocations for Database with `12_500` records:
+
+| Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
+| --- | --- | --- | --- |
+| naive_proxy_db_12_500          | 40.22 | 40.22 | 40.22 |
+| sql_lite_proxy_db_12_500       | 5.02 | 5.03 | 5.03 |
+| venn_proxy_db_12_500           | 3.15 | 3.15 | 3.15 |
+
+Allocations for Database with `100_000` records:
+
+| Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
+| --- | --- | --- | --- |
+| naive_proxy_db_100_000         | 324.00 | 324.00 | 324.00 |
+| sql_lite_proxy_db_100_000      | 5.02 | 5.02 | 5.03 |
+| venn_proxy_db_100_000          | 25.02 | 25.02 | 25.02 |
+
+We are not database nor hardware experts though. Please do open an issue if you think
+these benchmarks are incorrect or if related improvements can be made.
+Contributions in the form of Pull requests are welcomed as well.
+
+See [the Contribution guidelines](#contribution) for more information.
 
 ## Q&A
 
