@@ -329,6 +329,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v1
+
+  cargo-fuzz:
+    needs: [check, check-msrv]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{env.RUST_TOOLCHAIN_NIGHTLY}}
@@ -337,4 +344,4 @@ jobs:
           cargo install cargo-fuzz
       - name: cargo fuzz check
         run: |
-          cargo fuzz run -max-total-time=30 fuzz_employee_db
+          cargo fuzz run fuzz_employee_db -- -max-total-time=30
