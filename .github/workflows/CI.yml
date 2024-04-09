@@ -345,3 +345,14 @@ jobs:
       - name: cargo fuzz check
         run: |
           cargo fuzz run fuzz_employee_db -- -max_len=131072 -max_total_time=30
+
+  semver-checks:
+    needs: [check, check-msrv]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          rust-toolchain: ${{env.RUST_TOOLCHAIN}}
