@@ -264,6 +264,25 @@ fn main() {
     assert_eq!(new_employee.len(), 1);
     assert_eq!(new_employee[0].id, 9);
 
+    println!(">>> You can also extend it using an IntoIterator...");
+    db.extend([
+        RawCsvRow("10,Glenn Doe,false,true,true,true,Engineering"),
+        RawCsvRow("11,Peter Miss,true,true,true,true,HR"),
+    ]).unwrap();
+    let mut query = db.query();
+    query
+        .department(Department::HR)
+        .is_manager(true)
+        .is_active(true)
+        .is_admin(true);
+    let employees: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(employees.len(), 1);
+    assert_eq!(employees[0].id, 11);
+
     println!(">>> All previously data is still there as well of course...");
     query
         .reset()
