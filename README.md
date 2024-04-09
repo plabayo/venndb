@@ -49,6 +49,29 @@ Do let us know in case you use it as well in your project, such that we can asse
 
 💬 Come join us at [Discord][discord-url] on the `#venndb` public channel. To ask questions, discuss ideas and ask how venndb may be useful for you.
 
+## Index
+
+`venndb` manual:
+
+- [Usage](#usage): quick introduction on how to use `venndb`;
+- [Benchmarks](#benchmarks): benchmark results to give you a rough idea how `venndb` peforms for the use case it is made for (write once, read constantly, using binary filters mostly);
+- [Q&A](#qa): Frequently Asked Questions (FAQ);
+- [Example](#example): the full example (expanded version from [Usage](#usage)), tested and documented;
+- [Generated Code Summary](#generated-code-summary): a documented overview of the API that `venndb` will generate for you when using `#[derive(VennDB)]` on your _named field struct_;
+
+technical information:
+
+- [Safety](#--safety)
+- [Compatibility](#--compatibility)
+- [MSRV](#minimum-supported-rust-version) (older versions might work but we make no guarantees);
+- [Roadmap](#--roadmap)
+- [License](#--license): [MIT license][mit-license] and [Apache 2.0 License][apache-license]
+
+misc:
+
+- [Contributing](#--contributing)
+- [Sponsors](#--sponsors)
+
 ## Usage
 
 Add `venndb` as a dependency:
