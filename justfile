@@ -42,4 +42,4 @@ fuzz:
 	cargo +nightly fuzz run fuzz_employee_db
 
 fuzz-30s:
-	cargo +nightly fuzz run fuzz_employee_db -- -max_total_time=30
+	cargo +nightly fuzz run fuzz_employee_db -- -max_total_time=60
