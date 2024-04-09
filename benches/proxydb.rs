@@ -19,9 +19,11 @@ const COUNTRIES: [&str; 13] = [
     "US", "CA", "GB", "DE", "FR", "IT", "ES", "AU", "JP", "CN", "FR", "IT", "ES",
 ];
 
+#[allow(clippy::declare_interior_mutable_const)]
 const COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn next_round() -> usize {
+    #[allow(clippy::borrow_interior_mutable_const)]
     COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 

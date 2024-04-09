@@ -98,7 +98,7 @@ to learn how to use the `VennDB` and its generated code.
 
 Benchmarks displayed here are taken on a dev machine with following specs:
 
-```
+```text
 Macbook Pro — 16 inch (2023)
 Chip: Apple M2 Pro
 Memory: 16 GB

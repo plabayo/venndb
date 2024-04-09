@@ -80,7 +80,7 @@ impl ProxyDB for InMemProxyDB {
     }
 
     fn get(&self, id: u64) -> Option<Cow<Proxy>> {
-        self.get_by_id(&id).map(|proxy| Cow::Borrowed(proxy))
+        self.get_by_id(&id).map(Cow::Borrowed)
     }
 
     fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
@@ -137,7 +137,7 @@ impl ProxyDB for NaiveProxyDB {
         } else {
             use rand::Rng;
             let index = rand::thread_rng().gen_range(0..found_proxies.len());
-            Some(Cow::Borrowed(&found_proxies[index]))
+            Some(Cow::Borrowed(found_proxies[index]))
         }
     }
 
@@ -158,7 +158,7 @@ impl ProxyDB for NaiveProxyDB {
         } else {
             use rand::Rng;
             let index = rand::thread_rng().gen_range(0..found_proxies.len());
-            Some(Cow::Borrowed(&found_proxies[index]))
+            Some(Cow::Borrowed(found_proxies[index]))
         }
     }
 }
