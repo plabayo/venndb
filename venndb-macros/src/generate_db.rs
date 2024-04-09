@@ -805,7 +805,9 @@ fn generate_query_struct_impl(
         }
 
         #vis enum #name_query_result_iter_kind<'a> {
+            /// An iterator found over the one-bits in the resulting (non-filtered) bit-vector.
             Bits(::venndb::__internal::IterOnes<'a, usize, ::venndb::__internal::Lsb0>),
+            /// An iterator over the indices of the filtered results.
             Indices(::std::slice::Iter<'a, usize>),
         }
     }
@@ -830,6 +832,7 @@ impl ToTokens for DbErrorKind {
         match self {
             Self::DuplicateKey => {
                 tokens.extend(quote! {
+                    /// The error kind for when the row to be insired has a key already known (key duplicate).
                     DuplicateKey,
                 });
             }
