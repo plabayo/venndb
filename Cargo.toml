@@ -26,4 +26,9 @@ rand = "0.8.5"
 venndb-macros = { version = "0.1.0", path = "venndb-macros" }
 
 [dev-dependencies]
+divan = "0.1.14"
 itertools = "0.12.1"
+
+[[bench]]
+name = "proxydb"
+harness = false

@@ -344,4 +344,4 @@ jobs:
           cargo install cargo-fuzz
       - name: cargo fuzz check
         run: |
-          cargo fuzz run fuzz_employee_db -- -max_total_time=30
+          cargo fuzz run fuzz_employee_db -- -max_len=131072 -max_total_time=30

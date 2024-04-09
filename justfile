@@ -39,7 +39,10 @@ watch-check:
 	cargo watch -x check -x test
 
 fuzz:
-	cargo +nightly fuzz run fuzz_employee_db
+	cargo +nightly fuzz run fuzz_employee_db -- -max_len=131072
 
 fuzz-30s:
-	cargo +nightly fuzz run fuzz_employee_db -- -max_total_time=60
+	cargo +nightly fuzz run fuzz_employee_db -- -max_len=131072 -max_total_time=60
+
+bench:
+	cargo bench
