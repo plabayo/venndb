@@ -4,8 +4,9 @@ use crate::errors::Errors;
 
 /// Attributes applied to a field of a `#![derive(VennDB)]` struct.
 #[derive(Default)]
-pub struct FieldAttrs {
+pub struct FieldAttrs<'a> {
     pub kind: Option<FieldKind>,
+    pub option_ty: Option<&'a syn::Type>,
 }
 
 pub enum FieldKind {
@@ -14,8 +15,8 @@ pub enum FieldKind {
     FilterMap,
 }
 
-impl FieldAttrs {
-    pub fn parse(errors: &Errors, field: &syn::Field) -> Self {
+impl<'a> FieldAttrs<'a> {
+    pub fn parse(errors: &Errors, field: &'a syn::Field) -> Self {
         let mut this = Self::default();
 
         let mut skipped = false;
@@ -72,11 +73,23 @@ impl FieldAttrs {
             }
         }
 
+        this.option_ty = ty_inner(&["Option"], &field.ty);
+
         if skipped {
             this.kind = None;
         } else if is_key {
-            this.kind = Some(FieldKind::Key);
-        } else if is_bool(&field.ty) {
+            if this.option_ty.is_some() {
+                errors.err(
+                    &field.ty,
+                    concat!(
+                        "Invalid field-level `venndb` attribute\n",
+                        "`key` fields cannot be `Option`",
+                    ),
+                );
+            } else {
+                this.kind = Some(FieldKind::Key);
+            }
+        } else if is_bool(this.option_ty.unwrap_or(&field.ty)) {
             this.kind = Some(FieldKind::Filter);
         } else if is_filter {
             // bool filters are to be seen as regular filters, even when made explicitly so!
@@ -163,4 +176,29 @@ fn is_matching_attr(name: &str, attr: &syn::Attribute) -> bool {
 /// Checks for `#[venndb ...]`
 fn is_venndb_attr(attr: &syn::Attribute) -> bool {
     is_matching_attr("venndb", attr)
+}
+
+/// Returns `Some(T)` if a type is `wrapper_name<T>` for any `wrapper_name` in `wrapper_names`.
+fn ty_inner<'a>(wrapper_names: &[&str], ty: &'a syn::Type) -> Option<&'a syn::Type> {
+    if let syn::Type::Path(path) = ty {
+        if path.qself.is_some() {
+            return None;
+        }
+        // Since we only check the last path segment, it isn't necessarily the case that
+        // we're referring to `std::vec::Vec` or `std::option::Option`, but there isn't
+        // a fool proof way to check these since name resolution happens after macro expansion,
+        // so this is likely "good enough" (so long as people don't have their own types called
+        // `Option` or `Vec` that take one generic parameter they're looking to parse).
+        let last_segment = path.path.segments.last()?;
+        if !wrapper_names.iter().any(|name| last_segment.ident == *name) {
+            return None;
+        }
+        if let syn::PathArguments::AngleBracketed(gen_args) = &last_segment.arguments {
+            let generic_arg = gen_args.args.first()?;
+            if let syn::GenericArgument::Type(ty) = &generic_arg {
+                return Some(ty);
+            }
+        }
+    }
+    None
 }

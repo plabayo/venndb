@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# 0.2.0 (2024-04-12)
+
+Breaking Changes:
+
+* Support Option<T> in a special way:
+  * for filters it means that both positive and negative bits will be set to false if the value is `None`;
+  * for filter maps this means that the filter is not even registered;
+  * keys cannot be optional;
+  * this is potentially breaking as some implementations from `0.1*` might have already used `Option` in a different way;
+
+Non-Breaking Changes:
+
+* improve documentaton;
+
 # 0.1.1 (2024-04-10)
 
 Non-Breaking Changes:
