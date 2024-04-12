@@ -107,3 +107,8 @@ main {
 #menu img {
     height: 25px;
 }
+
+#code-block {
+    padding: 10px;
+    border: 1px solid grey;
+}

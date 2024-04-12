@@ -48,7 +48,7 @@
         <div>
             <img src="banner.svg" alt="venndb banner" />
             <p id="about">
-                An in-memory database in Rust for rows queried using bit (flag) columns.
+                An <strong>append-only</strong> in-memory database in Rust for rows queried using bit (flag) columns.
                 This database is designed for a very specific use case where you have mostly static data that you
                 typically load at startup and have to query constantly using very simple filters. Datasets
                 like these can be large and should be both fast and compact.
@@ -90,6 +90,49 @@
                         </a>
                     </li>
                 </ul>
+            </div>
+            <div>
+                <h2>Example</h2>
+                <br>
+                <div id="code-block">
+                <code>
+                    <pre>
+use venndb::VennDB
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+    #[venndb(key)]
+    id: u32,
+    name: String,
+    is_manager: Option&lt;bool&gt;,
+    is_admin: bool,
+    #[venndb(skip)]
+    foo: bool,
+    #[venndb(filter)]
+    department: Department,
+    #[venndb(filter)]
+    country: Option&lt;String&gt;,
+}
+
+fn main() {
+    let db = EmployeeDB::from_iter(/* .. */);
+
+    let mut query = db.query();
+    let employee = query
+        .is_admin(true)
+        .is_manager(false)
+        .department(Department::Engineering)
+        .execute()
+        .expect("to have found at least one")
+        .any();
+
+    println!("non-manager admin engineer: {:?}", employee);
+}
+                    </pre>
+                </code>
+                </div>
+                <p>Learn more at <a href="https://crates.io/crates/venndb">https://crates.io/crates/venndb</a>.
+                <br>
             </div>
         </div>
     </main>

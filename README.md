@@ -5,8 +5,8 @@ This database is designed for a very specific use case where you have mostly sta
 like these can be large and should be both fast and compact.
 
 For the limited usecases where `venndb` can be applied to,
-ithas less dependencies and is faster then traditional choices,
-such as a naive implementation or a more heavy lifted dependency then _Sqlite_.
+it has less dependencies and is faster then traditional choices,
+such as a naive implementation or a more heavy lifted dependency such as _Sqlite_.
 
 > See [the benchmarks](#benchmarks) for more information on this topic.
 
@@ -90,12 +90,14 @@ pub struct Employee {
     #[venndb(key)]
     id: u32,
     name: String,
-    is_manager: bool,
+    is_manager: Option<bool>,
     is_admin: bool,
     #[venndb(skip)]
     foo: bool,
     #[venndb(filter)]
     department: Department,
+    #[venndb(filter)]
+    country: Option<String>,
 }
 
 fn main() {
@@ -254,7 +256,10 @@ pub struct Employee {
     name: String,
     is_manager: bool,
     is_admin: bool,
-    is_active: bool,
+    // filter (booleans) can be made optional,
+    // meaning that the row will not be able to be filtered (found)
+    // on this column when the row has a `None` value for it
+    is_active: Option<bool>,
     // booleans are automatically turned into (query) filters,
     // use the `skip` arg to stop this. As such it is only really needed for
     // bool properties :)
@@ -272,7 +277,15 @@ pub struct Employee {
     // trying to do so will result in a compile-team failure.
     #[venndb(filter)]
     department: Department,
+    // similar to regular bool filters,
+    // filter maps can also be optional.
+    // When a filter map is optional and the row's property for that filter is None,
+    // it will not be registered and thus not be able to filtered (found) on that property
+    #[venndb(filter)]
+    country: Option<String>,
 }
+
+// TODO: adapt the example to make this work
 
 fn main() {
     let db = EmployeeInMemDB::from_iter([
