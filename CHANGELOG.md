@@ -17,7 +17,7 @@ Breaking Changes:
 
 Non-Breaking Changes:
 
-* improve documentaton;
+* improve documentation;
 
 # 0.1.1 (2024-04-10)
 

@@ -226,6 +226,16 @@ That said, we do recommend that you use `enum` values if you can, or some other 
 
 Using for example a `String` directly is a bad idea as that would mean that `bE` != `Be` != `BE` != `Belgium` != `Belgique` != `België`. Even though these are really referring all to the same country. In such cases a much better idea is to at the very least create a wrapper type such as `struct Country(String)`, to allow you to enforce sanitization/validation when creating the value and ensuring the hashes will be the same for those values that are conceptually the same.
 
+> ❓ Why can do keys have to be unique and non-optional?
+
+Within `venndb` keys are meant to be able to look up,
+a row which was previously received via filters.
+
+As such it makes no sense for such keys to be:
+
+- duplicate: it would mean: as that can result in multiple rows or the wrong row to be returned;
+- optional: as that would mean the row cannot be looked up when the key is not defined;
+
 ## Example
 
 Here follows an example demonstrating all the features of `VennDB`.
