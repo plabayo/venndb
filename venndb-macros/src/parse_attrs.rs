@@ -12,7 +12,7 @@ pub struct FieldAttrs<'a> {
 pub enum FieldKind {
     Key,
     Filter,
-    FilterMap,
+    FilterMap { any: bool },
 }
 
 impl<'a> FieldAttrs<'a> {
@@ -22,6 +22,7 @@ impl<'a> FieldAttrs<'a> {
         let mut skipped = false;
         let mut is_key = false;
         let mut is_filter = false;
+        let mut is_any = false;
 
         for attr in &field.attrs {
             let ml: Vec<_> = if let Some(ml) = venndb_attr_to_meta_list(errors, attr) {
@@ -45,6 +46,14 @@ impl<'a> FieldAttrs<'a> {
                                     "Cannot have both `key` and `filter`",
                                 ),
                             );
+                        } else if is_any {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Cannot have both `key` and `any`",
+                                ),
+                            );
                         } else {
                             is_key = true;
                         }
@@ -59,6 +68,18 @@ impl<'a> FieldAttrs<'a> {
                             );
                         } else {
                             is_filter = true;
+                        }
+                    } else if name.is_ident("any") {
+                        if is_key {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Cannot have both `key` and `any`",
+                                ),
+                            );
+                        } else {
+                            is_any = true;
                         }
                     } else {
                         errors.err(
@@ -90,10 +111,28 @@ impl<'a> FieldAttrs<'a> {
                 this.kind = Some(FieldKind::Key);
             }
         } else if is_bool(this.option_ty.unwrap_or(&field.ty)) {
-            this.kind = Some(FieldKind::Filter);
+            if is_any {
+                errors.err(
+                    &field.ty,
+                    concat!(
+                        "Invalid field-level `venndb` attribute\n",
+                        "`any` cannot be used with `bool`",
+                    ),
+                );
+            } else {
+                this.kind = Some(FieldKind::Filter);
+            }
         } else if is_filter {
             // bool filters are to be seen as regular filters, even when made explicitly so!
-            this.kind = Some(FieldKind::FilterMap);
+            this.kind = Some(FieldKind::FilterMap { any: is_any });
+        } else if is_any {
+            errors.err(
+                &field.ty,
+                concat!(
+                    "Invalid field-level `venndb` attribute\n",
+                    "`any` can only be used with `filter`",
+                ),
+            );
         }
 
         this

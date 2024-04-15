@@ -1,0 +1,13 @@
+error: Invalid field-level `venndb` attribute
+       Cannot have both `key` and `any`
+ --> tests/fails/any_key.rs:5:19
+  |
+5 |     #[venndb(any, key)]
+  |                   ^^^
+
+error: Invalid field-level `venndb` attribute
+       `any` can only be used with `filter`
+ --> tests/fails/any_key.rs:6:14
+  |
+6 |     country: String,
+  |              ^^^^^^
