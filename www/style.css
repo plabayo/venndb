@@ -111,4 +111,16 @@ main {
 #code-block {
     padding: 10px;
     border: 1px solid grey;
+    background-color: black;
+    color: lightgreen;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+quote {
+    display: block;
+    margin: 10px auto;
+    padding: 10px;
+    font-style: italic;
+    text-align: center;
 }
