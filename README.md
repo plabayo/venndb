@@ -219,12 +219,20 @@ Please [open an issue](https://github.com/plabayo/venndb/issues) and also read [
 
 Alternatively you can also [join our Discord][discord-url] and start a conversation / discussion over there.
 
-> ❓ Can I use _any_ type for a `#[venndb(filter)]` property?
+> ❓ Can I use _whatever_ type for a `#[venndb(filter)]` property?
 
 Yes, as long as it implements `PartialEq + Eq + Hash + Clone`.
 That said, we do recommend that you use `enum` values if you can, or some other highly restricted form.
 
 Using for example a `String` directly is a bad idea as that would mean that `bE` != `Be` != `BE` != `Belgium` != `Belgique` != `België`. Even though these are really referring all to the same country. In such cases a much better idea is to at the very least create a wrapper type such as `struct Country(String)`, to allow you to enforce sanitization/validation when creating the value and ensuring the hashes will be the same for those values that are conceptually the same.
+
+> ❓ How do I make a filter optional?
+
+Both filters (`bool` properties) and filter maps (`T != bool` properties with the `#[venndb(filter)]` attribute)
+can be made optional by wrapping the types with `Option`, resulting in `Option<bool>` and `Option<T>`.
+
+Rows that have the `Option::None` value for such an optional column cannot filter on that property,
+but there is no other consequence beyond that.
 
 > ❓ Why can do keys have to be unique and non-optional?
 
@@ -235,6 +243,46 @@ As such it makes no sense for such keys to be:
 
 - duplicate: it would mean: as that can result in multiple rows or the wrong row to be returned;
 - optional: as that would mean the row cannot be looked up when the key is not defined;
+
+> ❓ How can I allow some rows to match for _any_ value of a certain (filter) column?
+
+Filter maps can allow to have a value to match all other values. It is up to you to declare the filter as such,
+and to also define for that type what the _one_ value to rule them all is.
+
+Usage:
+
+```rust,ignore
+use venndb::{Any, VennDB};
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Department {
+  Any,
+  Hr,
+  Engineering,
+}
+
+impl Any for Department {
+  fn is_any(&self) -> bool {
+    self == Department::Any
+  }
+}
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+  name: String,
+  #[venndb(filter, any)]
+  department: Department,
+}
+
+let db = EmployeeDB::from_iter([
+  Employee { name: "Jack".to_owned(), department: Department::Any },
+  Employee { name: "Derby".to_owned(), department: Department::Hr },
+]);
+let mut query = db.query();
+
+// will match Jack and Derby, as Jack is marked as Any, meaning it can work for w/e value
+let hr_employees: Vec<_> = query.department(Department::Hr).execute().unwrap().iter().collect();
+assert_eq!(hr_employees.len(), 2);
+```
 
 ## Example
 
