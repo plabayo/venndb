@@ -342,9 +342,24 @@ fn generate_db_struct_method_append(
                 let name = field.name();
                 let field_name = field.filter_name();
                 let field_name_not = field.filter_not_name();
-                quote! {
-                    self.#field_name.push(data.#name);
-                    self.#field_name_not.push(!data.#name);
+                if field.optional {
+                    quote! {
+                        match data.#name {
+                            Some(value) => {
+                                self.#field_name.push(value);
+                                self.#field_name_not.push(!value);
+                            }
+                            None => {
+                                self.#field_name.push(false);
+                                self.#field_name_not.push(false);
+                            }
+                        }
+                    }
+                } else {
+                    quote! {
+                        self.#field_name.push(data.#name);
+                        self.#field_name_not.push(!data.#name);
+                    }
                 }
             }
             FieldInfo::FilterMap(field) => {
@@ -352,19 +367,42 @@ fn generate_db_struct_method_append(
                 let filter_map_name = field.filter_map_name();
                 let filter_vec_name = field.filter_vec_name();
                 let filter_index = format_ident!("{}_index", filter_vec_name);
-                quote! {
-                    let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
-                        ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
-                        ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
-                            let vec_index = self.#filter_vec_name.len();
-                            entry.insert(vec_index);
-                            let bv = ::venndb::__internal::BitVec::repeat(false, index);
-                            self.#filter_vec_name.push(bv);
-                            vec_index
+                if field.optional {
+                    quote! {
+                        let #filter_index = match data.#name.clone() {
+                            Some(value) => {
+                                Some(match self.#filter_map_name.entry(value) {
+                                    ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
+                                    ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
+                                        let vec_index = self.#filter_vec_name.len();
+                                        entry.insert(vec_index);
+                                        let bv = ::venndb::__internal::BitVec::repeat(false, index);
+                                        self.#filter_vec_name.push(bv);
+                                        vec_index
+                                    }
+                                })
+                            },
+                            None => None,
+                        };
+                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
+                            row.push(Some(i) == #filter_index);
                         }
-                    };
-                    for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
-                        row.push(i == #filter_index);
+                    }
+                } else {
+                    quote! {
+                        let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
+                            ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
+                            ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
+                                let vec_index = self.#filter_vec_name.len();
+                                entry.insert(vec_index);
+                                let bv = ::venndb::__internal::BitVec::repeat(false, index);
+                                self.#filter_vec_name.push(bv);
+                                vec_index
+                            }
+                        };
+                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
+                            row.push(i == #filter_index);
+                        }
                     }
                 }
             }

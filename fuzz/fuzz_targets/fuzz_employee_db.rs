@@ -10,14 +10,23 @@ pub struct Employee {
     id: u16,
     _name: String,
     earth: bool,
+    alive: Option<bool>,
     #[venndb(filter)]
     faction: Faction,
+    #[venndb(filter)]
+    planet: Option<Planet>,
 }
 
 #[derive(Clone, Debug, Arbitrary, PartialEq, Eq, Hash)]
 pub enum Faction {
     Rebel,
     Empire,
+}
+
+#[derive(Clone, Debug, Arbitrary, PartialEq, Eq, Hash)]
+pub enum Planet {
+    Earth,
+    Mars,
 }
 
 fuzz_target!(|rows: Vec<Employee>| {

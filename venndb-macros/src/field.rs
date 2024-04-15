@@ -13,7 +13,7 @@ pub struct StructField<'a> {
     /// The original parsed field
     field: &'a syn::Field,
     /// The parsed attributes of the field
-    attrs: FieldAttrs,
+    attrs: FieldAttrs<'a>,
     /// The field name. This is contained optionally inside `field`,
     /// but is duplicated non-optionally here to indicate that all field that
     /// have reached this point must have a field name, and it no longer
@@ -52,6 +52,7 @@ impl<'a> KeyField<'a> {
 
 pub struct FilterField<'a> {
     pub name: &'a Ident,
+    pub optional: bool,
 }
 
 impl<'a> FilterField<'a> {
@@ -71,7 +72,7 @@ impl<'a> FilterField<'a> {
 impl<'a> StructField<'a> {
     /// Attempts to parse a field of a `#[derive(VennDB)]` struct, pulling out the
     /// fields required for code generation.
-    pub fn new(_errors: &Errors, field: &'a syn::Field, attrs: FieldAttrs) -> Option<Self> {
+    pub fn new(_errors: &Errors, field: &'a syn::Field, attrs: FieldAttrs<'a>) -> Option<Self> {
         let name = field.ident.as_ref().expect("missing ident for named field");
         Some(StructField { field, attrs, name })
     }
@@ -81,12 +82,16 @@ impl<'a> StructField<'a> {
         self.attrs.kind.as_ref().map(|kind| match kind {
             FieldKind::Key => FieldInfo::Key(KeyField {
                 name: self.name,
-                ty: &self.field.ty,
+                ty: self.attrs.option_ty.unwrap_or(&self.field.ty),
             }),
-            FieldKind::Filter => FieldInfo::Filter(FilterField { name: self.name }),
+            FieldKind::Filter => FieldInfo::Filter(FilterField {
+                name: self.name,
+                optional: self.attrs.option_ty.is_some(),
+            }),
             FieldKind::FilterMap => FieldInfo::FilterMap(FilterMapField {
                 name: self.name,
-                ty: &self.field.ty,
+                ty: self.attrs.option_ty.unwrap_or(&self.field.ty),
+                optional: self.attrs.option_ty.is_some(),
             }),
         })
     }
@@ -95,6 +100,7 @@ impl<'a> StructField<'a> {
 pub struct FilterMapField<'a> {
     pub name: &'a Ident,
     pub ty: &'a syn::Type,
+    pub optional: bool,
 }
 
 impl<'a> FilterMapField<'a> {

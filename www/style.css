@@ -62,7 +62,7 @@ main {
     justify-items: center;
 }
 
-#about {
+#about p {
     margin: 0 auto;
     padding: 10px;
 }
@@ -106,4 +106,21 @@ main {
 
 #menu img {
     height: 25px;
+}
+
+#code-block {
+    padding: 10px;
+    border: 1px solid grey;
+    background-color: black;
+    color: lightgreen;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+quote {
+    display: block;
+    margin: 10px auto;
+    padding: 10px;
+    font-style: italic;
+    text-align: center;
 }

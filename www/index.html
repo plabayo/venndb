@@ -47,12 +47,28 @@
     <main>
         <div>
             <img src="banner.svg" alt="venndb banner" />
-            <p id="about">
-                An in-memory database in Rust for rows queried using bit (flag) columns.
-                This database is designed for a very specific use case where you have mostly static data that you
-                typically load at startup and have to query constantly using very simple filters. Datasets
-                like these can be large and should be both fast and compact.
-            </p>
+            <div id="about">
+                <p>
+                    An <strong>append-only</strong> in-memory database in Rust for rows queried using bit (flag) columns.
+                    This database is designed for a very specific use case where you have mostly static data that you
+                    typically load at startup and have to query constantly using very simple filters. Datasets
+                    like these can be large and should be both fast and compact.
+                </p>
+                
+                <p>
+                    For the limited usecases where venndb can be applied to, it has less dependencies and is faster then traditional choices,
+                    such as a naive implementation or a more heavy lifted dependency such as <em>Sqlite</em>.
+                </p>
+
+                <quote>
+                    See <a href="https://github.com/plabayo/venndb#benchmarks">the benchmarks</a> for more information on this topic.
+                </quote>
+
+                <p>
+                    This project was developed originally in function of <a href="https://ramaproxy.org/">rama</a>, where you can see it being used for example to provide an in-memory (upstream) proxy database.
+                    Do <a href="mailto:glen@plabayo.tech">let us know</a> in case you use it as well in your project, such that we can assemble a showcase list.
+                </p>
+            </div>
             <button class="copy-button" title="Copy command to clipboard" type="button">
                 <span>cargo add venndb</span>
                 <svg width="24" height="25" viewBox="0 0 24 25" fill="currentColor" xmlns="http://www.w3.org/2000/svg"
@@ -90,6 +106,50 @@
                         </a>
                     </li>
                 </ul>
+            </div>
+            <div>
+                <h2>Example</h2>
+                <br>
+                <div id="code-block">
+                <code>
+                    <pre>
+use venndb::VennDB
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+    #[venndb(key)]
+    id: u32,
+    name: String,
+    is_manager: Option&lt;bool&gt;,
+    is_admin: bool,
+    #[venndb(skip)]
+    foo: bool,
+    #[venndb(filter)]
+    department: Department,
+    #[venndb(filter)]
+    country: Option&lt;String&gt;,
+}
+
+fn main() {
+    let db = EmployeeDB::from_iter(/* .. */);
+
+    let mut query = db.query();
+    let employee = query
+        .is_admin(true)
+        .is_manager(false)
+        .department(Department::Engineering)
+        .execute()
+        .expect("to have found at least one")
+        .any();
+
+    println!("non-manager admin engineer: {:?}", employee);
+}
+                    </pre>
+                </code>
+                </div>
+                <quote>
+                    <p>Learn more at <a href="https://github.com/plabayo/venndb">https://github.com/plabayo/venndb</a>.
+                </quote>
             </div>
         </div>
     </main>

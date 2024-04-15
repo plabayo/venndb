@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       `key` fields cannot be `Option`
+ --> tests/fails/option_key.rs:6:9
+  |
+6 |     id: Option<u32>,
+  |         ^^^^^^
