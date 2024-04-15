@@ -12,7 +12,7 @@ repository = "https://github.com/plabayo/venndb"
 keywords = ["database", "db", "memory", "bits"]
 categories = ["database"]
 authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
-version = "0.2.0"
+version = "0.2.1"
 rust-version = "1.75.0"
 
 [package.metadata.docs.rs]
@@ -23,7 +23,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 bitvec = "1.0.1"
 hashbrown = "0.14.3"
 rand = "0.8.5"
-venndb-macros = { version = "0.2.0", path = "venndb-macros" }
+venndb-macros = { version = "0.2.1", path = "venndb-macros" }
 
 [dev-dependencies]
 divan = "0.1.14"
