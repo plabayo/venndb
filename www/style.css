@@ -117,6 +117,10 @@ main {
     font-size: 0.9em;
 }
 
+pre {
+    white-space: pre-wrap;
+}
+
 quote {
     display: block;
     margin: 10px auto;
