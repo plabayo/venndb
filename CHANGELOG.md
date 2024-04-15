@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# 0.2.0 (2024-04-12)
+# 0.2.1 (2024-04-15)
+
+Non-Breaking changes:
+
+* support `#[venndb(any)]` filters;
+  * these are possible only for `T` filter maps, where `T: ::venndb::Any`;
+  * `bool` filters cannot be `any` as `bool` doesn't implement the `::venndb::Any` trait;
+  * rows that are `any` will match regardless of the query filter used for that property;
+
+# 0.2.0 (2024-04-15)
 
 Breaking Changes:
 
@@ -25,6 +34,44 @@ Even more so for `filter maps` it could have resulted in panics.
 Non-Breaking Changes:
 
 * improve documentation;
+
+Updated Example from 0.1:
+
+```rust
+use venndb::VennDB
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+    #[venndb(key)]
+    id: u32,
+    name: String,
+    is_manager: Option<bool>,
+    is_admin: bool,
+    #[venndb(skip)]
+    foo: bool,
+    #[venndb(filter)]
+    department: Department,
+    #[venndb(filter)]
+    country: Option<String>,
+}
+
+fn main() {
+    let db = EmployeeDB::from_iter(/* .. */);
+
+    let mut query = db.query();
+    let employee = query
+        .is_admin(true)
+        .is_manager(false)  // rows which have `None` for this property will NOT match this filter
+        .department(Department::Engineering)
+        .execute()
+        .expect("to have found at least one")
+        .any();
+
+    println!("non-manager admin engineer: {:?}", employee);
+    // as we didn't specify a `country` filter, even rows without a country specified will
+    // match here if they match the defined (query) filters)
+}
+```
 
 # 0.1.1 (2024-04-10)
 
