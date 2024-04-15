@@ -295,18 +295,16 @@ pub struct Employee {
     country: Option<String>,
 }
 
-// TODO: adapt the example to make this work
-
 fn main() {
     let db = EmployeeInMemDB::from_iter([
-        RawCsvRow("1,John Doe,true,false,true,false,Engineering"),
-        RawCsvRow("2,Jane Doe,false,true,true,true,Sales"),
-        RawCsvRow("3,John Smith,false,false,true,false,Marketing"),
-        RawCsvRow("4,Jane Smith,true,true,false,true,HR"),
-        RawCsvRow("5,John Johnson,true,true,true,true,Engineering"),
-        RawCsvRow("6,Jane Johnson,false,false,false,false,Sales"),
-        RawCsvRow("7,John Brown,true,false,true,false,Marketing"),
-        RawCsvRow("8,Jane Brown,false,true,true,true,HR"),
+        RawCsvRow("1,John Doe,true,false,true,false,Engineering,USA"),
+        RawCsvRow("2,Jane Doe,false,true,true,true,Sales,"),
+        RawCsvRow("3,John Smith,false,false,,false,Marketing,"),
+        RawCsvRow("4,Jane Smith,true,true,false,true,HR,"),
+        RawCsvRow("5,John Johnson,true,true,true,true,Engineering,"),
+        RawCsvRow("6,Jane Johnson,false,false,,false,Sales,BE"),
+        RawCsvRow("7,John Brown,true,false,true,false,Marketing,BE"),
+        RawCsvRow("8,Jane Brown,false,true,true,true,HR,BR"),
     ])
     .expect("MemDB created without errors (e.g. no duplicate keys)");
 
@@ -360,9 +358,22 @@ fn main() {
         .any();
     assert!(manager.id == 1 || manager.id == 5);
 
+    println!(">>> Optional bool filters have three possible values, where None != false. An important distinction to make...");
+    let mut query = db.query();
+    query.is_active(false);
+    let inactive_employees: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(inactive_employees.len(), 1);
+    assert_eq!(inactive_employees[0].id, 4);
+
     println!(">>> If you want you can also get the Employees back as a Vec, dropping the DB data all together...");
     let employees = db.into_rows();
     assert_eq!(employees.len(), 8);
+    assert!(employees[1].foo);
+    println!("All employees: {:?}", employees);
 
     println!(">>> You can also get the DB back from the Vec, if you want start to query again...");
     // of course better to just keep it as a DB to begin with, but let's pretend this is ok in this example
@@ -381,13 +392,23 @@ fn main() {
     assert_eq!(sales_employees.len(), 1);
     assert_eq!(sales_employees[0].name, "Jane Doe");
 
+    println!(">>> Filter maps that are optional work as well, e.g. you can query for all employees from USA...");
+    query.reset().country("USA".to_owned());
+    let usa_employees: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(usa_employees.len(), 1);
+    assert_eq!(usa_employees[0].id, 1);
+
     println!(">>> At any time you can also append new employees to the DB...");
     assert!(db
-        .append(RawCsvRow("8,John Doe,true,false,true,false,Engineering"))
+        .append(RawCsvRow("8,John Doe,true,false,true,false,Engineering,"))
         .is_err());
     println!(">>> This will fail however if a property is not correct (e.g. ID (key) is not unique in this case), let's try this again...");
     assert!(db
-        .append(RawCsvRow("9,John Doe,false,true,true,false,Engineering"))
+        .append(RawCsvRow("9,John Doe,false,true,true,false,Engineering,"))
         .is_ok());
     assert_eq!(db.len(), 9);
 
@@ -404,9 +425,10 @@ fn main() {
 
     println!(">>> You can also extend it using an IntoIterator...");
     db.extend([
-        RawCsvRow("10,Glenn Doe,false,true,true,true,Engineering"),
-        RawCsvRow("11,Peter Miss,true,true,true,true,HR"),
-    ]).unwrap();
+        RawCsvRow("10,Glenn Doe,false,true,true,true,Engineering,"),
+        RawCsvRow("11,Peter Miss,true,true,true,true,HR,USA"),
+    ])
+    .unwrap();
     let mut query = db.query();
     query
         .department(Department::HR)
@@ -420,6 +442,19 @@ fn main() {
         .collect();
     assert_eq!(employees.len(), 1);
     assert_eq!(employees[0].id, 11);
+
+    println!(">>> There are now 2 employees from USA...");
+    query.reset().country("USA".to_owned());
+    let employees: Vec<_> = query
+        .execute()
+        .expect("to have found at least one")
+        .iter()
+        .collect();
+    assert_eq!(employees.len(), 2);
+    assert_eq!(
+        employees.iter().map(|e| e.id).sorted().collect::<Vec<_>>(),
+        [1, 11]
+    );
 
     println!(">>> All previously data is still there as well of course...");
     query
@@ -448,14 +483,29 @@ where
 {
     fn from(RawCsvRow(s): RawCsvRow<S>) -> Employee {
         let mut parts = s.as_ref().split(',');
+        let id = parts.next().unwrap().parse().unwrap();
+        let name = parts.next().unwrap().to_string();
+        let is_manager = parts.next().unwrap().parse().unwrap();
+        let is_admin = parts.next().unwrap().parse().unwrap();
+        let is_active = match parts.next().unwrap() {
+            "" => None,
+            s => Some(s.parse().unwrap()),
+        };
+        let foo = parts.next().unwrap().parse().unwrap();
+        let department = parts.next().unwrap().parse().unwrap();
+        let country = match parts.next().unwrap() {
+            "" => None,
+            s => Some(s.to_string()),
+        };
         Employee {
-            id: parts.next().unwrap().parse().unwrap(),
-            name: parts.next().unwrap().to_string(),
-            is_manager: parts.next().unwrap().parse().unwrap(),
-            is_admin: parts.next().unwrap().parse().unwrap(),
-            is_active: parts.next().unwrap().parse().unwrap(),
-            foo: parts.next().unwrap().parse().unwrap(),
-            department: parts.next().unwrap().parse().unwrap(),
+            id,
+            name,
+            is_manager,
+            is_admin,
+            is_active,
+            foo,
+            department,
+            country,
         }
     }
 }
@@ -496,11 +546,12 @@ pub struct Employee {
     name: String,
     is_manager: bool,
     is_admin: bool,
-    is_active: bool,
+    is_active: Option<bool>,
     #[venndb(skip)]
     foo: bool,
     #[venndb(filter)]
     department: Department,
+    country: Option<String>,
 }
 ```
 
@@ -542,8 +593,8 @@ Query (e.g. `EmployeeInMemDBQuery`)
 | - | - |
 | `EmployeeInMemDBQuery::reset(&mut self) -> &mut Self` | reset the query, bringing it back to the clean state it has on creation |
 | `EmployeeInMemDBQuery::execute(&self) -> Option<EmployeeInMemDBQueryResult<'a>>` | return the result of the query using the set filters. It will be `None` in case no rows matched the defined filters. Or put otherwise, the result will contain at least one row when `Some(_)` is returned. |
-| `EmployeeInMemDBQuery::is_manager(&mut self, value: bool) -> &mut Self` | a filter setter for a `bool` filter. One such method per `bool` filter (that isn't `skip`ped) will be available. E.g. if you have ` foo` filter then there will be a `EmployeeInMemDBQuery:foo` method. |
-| `EmployeeInMemDBQuery::department(&mut self, value: Department) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. |
+| `EmployeeInMemDBQuery::is_manager(&mut self, value: bool) -> &mut Self` | a filter setter for a `bool` filter. One such method per `bool` filter (that isn't `skip`ped) will be available. E.g. if you have ` foo` filter then there will be a `EmployeeInMemDBQuery:foo` method. For _bool_ filters that are optional (`Option<bool>`) this method is also generated just the same. |
+| `EmployeeInMemDBQuery::department(&mut self, value: Department) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. Filter maps that have a `Option<T>` type have exactly the same signature. |
 
 Query Result (e.g. `EmployeeInMemDBQueryResult`)
 

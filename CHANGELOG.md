@@ -13,7 +13,14 @@ Breaking Changes:
   * for filters it means that both positive and negative bits will be set to false if the value is `None`;
   * for filter maps this means that the filter is not even registered;
   * keys cannot be optional;
+    * While technically this is a breaking change it is not expected to actually break someone,
+      as keys always had to be unique already and two times `None` will result in same hash... so it is unlikely
+      that there was an `Option<T>` already used by someone;
   * this is potentially breaking as some implementations from `0.1*` might have already used `Option` in a different way;
+
+While this changes behaviour of `filters` and `filter maps` it is unlikely that someone was already using
+`Option<T>` for these types before, as their ergonomics have been a bit weird prior to this version.
+Even more so for `filter maps` it could have resulted in panics.
 
 Non-Breaking Changes:
 
