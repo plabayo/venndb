@@ -758,17 +758,14 @@ fn generate_query_struct_impl(
                         None => return None,
                     };
                 };
-                let value_filter = match field.filter_any_name() {
-                    Some(name) => {
-                        quote! {
-                            if ::venndb::Any::is_any(&value) {
-                                filter &= &self.db.#name;
-                            } else {
-                                #value_filter
-                            }
+                let value_filter = if field.any {
+                    quote! {
+                        if !::venndb::Any::is_any(&value) {
+                            #value_filter
                         }
                     }
-                    None => value_filter,
+                } else {
+                    value_filter
                 };
                 Some(quote! {
                     // Filter by the filterm ap below, only if it is defined as Some(_).
