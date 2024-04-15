@@ -14,6 +14,45 @@ Non-Breaking changes:
   * `bool` filters cannot be `any` as `bool` doesn't implement the `::venndb::Any` trait;
   * rows that are `any` will match regardless of the query filter used for that property;
 
+Example usage:
+
+```rust
+use venndb::{Any, VennDB};
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Department {
+  Any,
+  Hr,
+  Engineering,
+}
+
+impl Any for Department {
+  fn is_any(&self) -> bool {
+    self == Department::Any
+  }
+}
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+  name: String,
+  #[venndb(filter, any)]
+  department: Department,
+}
+
+let db = EmployeeDB::from_iter([
+  Employee { name: "Jack".to_owned(), department: Department::Any },
+  Employee { name: "Derby".to_owned(), department: Department::Hr },
+]);
+let mut query = db.query();
+
+// will match Jack and Derby, as Jack is marked as Any, meaning it can work for w/e value
+let hr_employees: Vec<_> = query.department(Department::Hr).execute().unwrap().iter().collect();
+assert_eq!(hr_employees.len(), 2);
+```
+
+In case you combine it with the filter map property being optional (`department: Option<Department>`),
+then it will still work the same, where rows with `None` are seen as nothing at all and just ignored.
+This has no affect on the correct functioning of `Any`.
+
 # 0.2.0 (2024-04-15)
 
 Breaking Changes:
@@ -30,6 +69,9 @@ Breaking Changes:
 While this changes behaviour of `filters` and `filter maps` it is unlikely that someone was already using
 `Option<T>` for these types before, as their ergonomics have been a bit weird prior to this version.
 Even more so for `filter maps` it could have resulted in panics.
+
+Options, be it filters of filter maps, allow you to have rows that do not register any value for optional
+properties, allowing them to exist without affecting the rows which do have it.
 
 Non-Breaking Changes:
 
