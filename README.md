@@ -94,7 +94,7 @@ pub struct Employee {
     is_admin: bool,
     #[venndb(skip)]
     foo: bool,
-    #[venndb(filter)]
+    #[venndb(filter, any)]
     department: Department,
     #[venndb(filter)]
     country: Option<String>,
