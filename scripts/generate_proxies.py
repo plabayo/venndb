@@ -12,6 +12,7 @@ POOLS = [
     "poolH",
     "poolI",
     "poolJ",
+    "",
 ]
 COUNTRIES = ["US", "CA", "GB", "AU", "JP", "DE", "FR", "IT", "ES", "NL"]
 
@@ -46,7 +47,7 @@ def random_row():
     if pool in ["poolA", "poolB"]:
         country = "US"
     if pool == "poolJ":
-        country = "BE"
+        country = "*"
     elif pool == "poolB":
         country = random.choice(["US", "CA"])
     elif pool == "poolC":

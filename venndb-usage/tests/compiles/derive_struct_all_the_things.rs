@@ -1,4 +1,4 @@
-use venndb::VennDB;
+use venndb::{Any, VennDB};
 
 #[derive(Debug, VennDB)]
 #[venndb(name = "EmployeeSheet")]
@@ -12,7 +12,7 @@ struct Employee {
     is_something: Option<bool>,
     #[venndb(skip)]
     is_active: bool,
-    #[venndb(filter)]
+    #[venndb(filter, any)]
     department: Department,
     #[venndb(filter)]
     country: Option<String>,
@@ -20,10 +20,17 @@ struct Employee {
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Department {
+    Any,
     Engineering,
     Sales,
     Marketing,
     HR,
+}
+
+impl Any for Department {
+    fn is_any(&self) -> bool {
+        self == &Department::Any
+    }
 }
 
 fn main() {
@@ -47,6 +54,9 @@ fn main() {
     assert_eq!(employee_ref.country, None);
 
     let mut query = db.query();
-    query.is_manager(true).is_admin(true);
+    query
+        .is_manager(true)
+        .is_admin(true)
+        .department(Department::Engineering);
     assert!(query.execute().is_none());
 }

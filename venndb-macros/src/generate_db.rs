@@ -59,10 +59,17 @@ fn generate_db_struct(
             FieldInfo::FilterMap(field) => {
                 let filter_map_name = field.filter_map_name();
                 let filter_vec_name = field.filter_vec_name();
+                let filter_any = match field.filter_any_name() {
+                    Some(name) => quote! {
+                        #name: ::venndb::__internal::BitVec,
+                    },
+                    None => quote! {},
+                };
                 let ty: &syn::Type = field.ty();
                 quote! {
                     #filter_map_name: ::venndb::__internal::HashMap<#ty, usize>,
                     #filter_vec_name: ::std::vec::Vec<::venndb::__internal::BitVec>,
+                    #filter_any
                 }
             }
         })
@@ -169,9 +176,16 @@ fn generate_db_struct_method_new(
             FieldInfo::FilterMap(field) => {
                 let filter_map_name = field.filter_map_name();
                 let filter_vec_name = field.filter_vec_name();
+                let filter_any = match field.filter_any_name() {
+                    Some(name) => quote! {
+                        #name: ::venndb::__internal::BitVec::new(),
+                    },
+                    None => quote! {},
+                };
                 quote! {
                     #filter_map_name: ::venndb::__internal::HashMap::new(),
                     #filter_vec_name: ::std::vec::Vec::new(),
+                    #filter_any
                 }
             }
         })
@@ -219,9 +233,16 @@ fn generate_db_struct_method_with_capacity(
             FieldInfo::FilterMap(field) => {
                 let filter_map_name = field.filter_map_name();
                 let filter_vec_name = field.filter_vec_name();
+                let filter_any = match field.filter_any_name() {
+                    Some(name) => quote! {
+                        #name: ::venndb::__internal::BitVec::with_capacity(capacity),
+                    },
+                    None => quote! {},
+                };
                 quote! {
                     #filter_map_name: ::venndb::__internal::HashMap::with_capacity(capacity),
                     #filter_vec_name: ::std::vec::Vec::with_capacity(capacity),
+                    #filter_any
                 }
             }
         })
@@ -367,16 +388,69 @@ fn generate_db_struct_method_append(
                 let filter_map_name = field.filter_map_name();
                 let filter_vec_name = field.filter_vec_name();
                 let filter_index = format_ident!("{}_index", filter_vec_name);
+
+                let filter_any_backfill = match field.filter_any_name() {
+                    Some(name) => quote! {
+                        let bv = bv | &self.#name;
+                    },
+                    None => quote! {},
+                };
+
+                let filter_any_register = match field.filter_any_name() {
+                    Some(name) => quote! {
+                       self.#name.push(::venndb::Any::is_any(&value));
+                    },
+                    None => quote! {},
+                };
+
+                let register_rows = if field.optional {
+                    quote! {
+                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
+                            row.push(Some(i) == #filter_index);
+                        }
+                    }
+                } else {
+                    quote! {
+                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
+                            row.push(i == #filter_index);
+                        }
+                    }
+                };
+                let is_any_value = if field.optional {
+                    quote! {
+                        data.#name.as_ref().map(|v| ::venndb::Any::is_any(v)).unwrap_or_default()
+                    }
+                } else {
+                    quote! {
+                        ::venndb::Any::is_any(&data.#name)
+                    }
+                };
+                let register_rows = if field.any {
+                    quote! {
+                        if #is_any_value {
+                            for row in self.#filter_vec_name.iter_mut() {
+                                row.push(true);
+                            }
+                        } else {
+                            #register_rows
+                        }
+                    }
+                } else {
+                    register_rows
+                };
+
                 if field.optional {
                     quote! {
                         let #filter_index = match data.#name.clone() {
                             Some(value) => {
+                                #filter_any_register
                                 Some(match self.#filter_map_name.entry(value) {
                                     ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
                                     ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
                                         let vec_index = self.#filter_vec_name.len();
                                         entry.insert(vec_index);
                                         let bv = ::venndb::__internal::BitVec::repeat(false, index);
+                                        #filter_any_backfill
                                         self.#filter_vec_name.push(bv);
                                         vec_index
                                     }
@@ -384,25 +458,24 @@ fn generate_db_struct_method_append(
                             },
                             None => None,
                         };
-                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
-                            row.push(Some(i) == #filter_index);
-                        }
+                        #register_rows
                     }
                 } else {
                     quote! {
-                        let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
+                        let value = data.#name.clone();
+                        #filter_any_register
+                        let #filter_index = match self.#filter_map_name.entry(value) {
                             ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
                             ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
                                 let vec_index = self.#filter_vec_name.len();
                                 entry.insert(vec_index);
                                 let bv = ::venndb::__internal::BitVec::repeat(false, index);
+                                #filter_any_backfill
                                 self.#filter_vec_name.push(bv);
                                 vec_index
                             }
                         };
-                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
-                            row.push(i == #filter_index);
-                        }
+                        #register_rows
                     }
                 }
             }
@@ -679,16 +752,28 @@ fn generate_query_struct_impl(
                 let name = field.name();
                 let filter_map_name: Ident = field.filter_map_name();
                 let filter_vec_name: Ident = field.filter_vec_name();
+                let value_filter = quote! {
+                    match self.db.#filter_map_name.get(value) {
+                        Some(index) => filter &= &self.db.#filter_vec_name[*index],
+                        None => return None,
+                    };
+                };
+                let value_filter = if field.any {
+                    quote! {
+                        if !::venndb::Any::is_any(&value) {
+                            #value_filter
+                        }
+                    }
+                } else {
+                    value_filter
+                };
                 Some(quote! {
                     // Filter by the filterm ap below, only if it is defined as Some(_).
                     // If there is no filter matched to the given value then the search is over,
                     // and we early return None.
 
                     if let Some(value) = &self.#name {
-                        match self.db.#filter_map_name.get(value) {
-                            Some(index) => filter &= &self.db.#filter_vec_name[*index],
-                            None => return None,
-                        };
+                        #value_filter
                     }
                 })
             }

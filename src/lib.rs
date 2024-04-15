@@ -2,6 +2,66 @@
 
 pub use venndb_macros::VennDB;
 
+/// A trait that types can implement in order to support `#[venndb(any)]` attribute filters.
+pub trait Any {
+    /// Returns true if the value is considered to be "any" within the context of the type.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use venndb::Any;
+    ///
+    /// #[derive(Debug)]
+    /// struct MyString(String);
+    ///
+    /// impl Any for MyString {
+    ///    fn is_any(&self) -> bool {
+    ///       self.0 == "*"
+    ///   }
+    /// }
+    ///
+    /// let my_string = MyString("*".to_string());
+    /// assert!(my_string.is_any());
+    ///
+    /// let my_string = MyString("hello".to_string());
+    /// assert!(!my_string.is_any());
+    /// ```
+    fn is_any(&self) -> bool;
+}
+
+impl<T: Any> Any for &T {
+    fn is_any(&self) -> bool {
+        T::is_any(*self)
+    }
+}
+
+impl<T: Any> Any for Option<T> {
+    fn is_any(&self) -> bool {
+        match self {
+            Some(value) => value.is_any(),
+            None => false,
+        }
+    }
+}
+
+impl<T: Any> Any for std::sync::Arc<T> {
+    fn is_any(&self) -> bool {
+        T::is_any(&**self)
+    }
+}
+
+impl<T: Any> Any for std::rc::Rc<T> {
+    fn is_any(&self) -> bool {
+        T::is_any(&**self)
+    }
+}
+
+impl<T: Any> Any for Box<T> {
+    fn is_any(&self) -> bool {
+        T::is_any(&**self)
+    }
+}
+
 #[doc(hidden)]
 pub mod __internal {
     //! Hidden thirdparty dependencies for venndb,

@@ -111,8 +111,7 @@
                 <h2>Example</h2>
                 <br>
                 <div id="code-block">
-                <pre><code>
-use venndb::VennDB
+                <pre><code>use venndb::VennDB
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -123,7 +122,7 @@ pub struct Employee {
     is_admin: bool,
     #[venndb(skip)]
     foo: bool,
-    #[venndb(filter)]
+    #[venndb(filter, any)]
     department: Department,
     #[venndb(filter)]
     country: Option&lt;String&gt;,

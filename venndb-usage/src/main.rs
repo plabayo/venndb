@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use venndb::VennDB;
+use venndb::{Any, VennDB};
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -11,7 +11,7 @@ pub struct Employee {
     is_manager: bool,
     is_admin: bool,
     is_active: bool,
-    #[venndb(filter)]
+    #[venndb(filter, any)]
     department: Department,
 }
 
@@ -36,10 +36,17 @@ impl From<L1Engineer> for Employee {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Department {
+    Any,
     Engineering,
     Sales,
     Marketing,
     HR,
+}
+
+impl Any for Department {
+    fn is_any(&self) -> bool {
+        self == &Department::Any
+    }
 }
 
 fn main() {
@@ -844,5 +851,151 @@ mod tests_v0_2 {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, 1);
         assert_eq!(results[1].id, 4);
+    }
+}
+
+#[cfg(test)]
+mod tests_v0_2_1 {
+    use super::*;
+
+    #[derive(Debug, VennDB)]
+    pub struct Worker {
+        #[venndb(key)]
+        id: u32,
+        is_admin: bool,
+        is_active: Option<bool>,
+        #[venndb(filter, any)]
+        department: Option<Department>,
+    }
+
+    #[test]
+    fn test_any_filter_map() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::HR,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Any);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 2);
+    }
+
+    #[test]
+    fn test_any_option_filter_map() {
+        let db = WorkerDB::from_rows(vec![
+            Worker {
+                id: 1,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Engineering),
+            },
+            Worker {
+                id: 2,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::HR),
+            },
+            Worker {
+                id: 3,
+                is_admin: false,
+                is_active: None,
+                department: None,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Any);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 2);
+        assert_eq!(results[2].id, 3);
+    }
+
+    #[test]
+    fn test_any_row_filter_map() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::Any,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Engineering);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 2);
+    }
+
+    #[test]
+    fn test_any_row_optional_filter_map() {
+        let db = WorkerDB::from_rows(vec![
+            Worker {
+                id: 1,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Engineering),
+            },
+            Worker {
+                id: 2,
+                is_admin: false,
+                is_active: None,
+                department: None,
+            },
+            Worker {
+                id: 3,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Any),
+            },
+            Worker {
+                id: 4,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::HR),
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Engineering);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 3);
     }
 }

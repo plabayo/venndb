@@ -94,7 +94,7 @@ pub struct Employee {
     is_admin: bool,
     #[venndb(skip)]
     foo: bool,
-    #[venndb(filter)]
+    #[venndb(filter, any)]
     department: Department,
     #[venndb(filter)]
     country: Option<String>,
@@ -138,8 +138,28 @@ The benchmarks tests 3 different implementations of a proxy database
 
 The benchmarks are created by:
 
-1. running `just bench`
-2. copying the output into [./scripts/plot_bench_charts](./scripts/plot_bench_charts.py) and running it
+1. running `just bench`;
+2. copying the output into [./scripts/plot_bench_charts](./scripts/plot_bench_charts.py) and running it.
+
+Snippet that is ran for each 3 implementations:
+
+```rust,ignore
+fn test_db(db: &impl ProxyDB) {
+    let i = next_round();
+
+    let pool = POOLS[i % POOLS.len()];
+    let country = COUNTRIES[i % COUNTRIES.len()];
+
+    let result = db.get(i as u64);
+    divan::black_box(result);
+
+    let result = db.any_tcp(pool, country);
+    divan::black_box(result);
+
+    let result = db.any_socks5_isp(pool, country);
+    divan::black_box(result);
+}
+```
 
 ### Benchmark Performance Results
 
@@ -147,25 +167,25 @@ Performance for Database with `100` records:
 
 | Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
 | --- | --- | --- | --- |
-| naive_proxy_db_100             | 6.87 | 7.48 | 19.16 |
-| sql_lite_proxy_db_100          | 34.16 | 36.33 | 78.04 |
-| venn_proxy_db_100              | 0.92 | 0.99 | 8.50 |
+| naive_proxy_db_100             | 6.50 | 8.00 | 18.04 |
+| sql_lite_proxy_db_100          | 32.58 | 37.37 | 302.00 |
+| venn_proxy_db_100              | 0.89 | 0.92 | 2.74 |
 
 Performance for Database with `12_500` records:
 
 | Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
 | --- | --- | --- | --- |
-| naive_proxy_db_12_500          | 402.20 | 407.60 | 434.30 |
-| sql_lite_proxy_db_12_500       | 1099.00 | 1182.00 | 1519.00 |
-| venn_proxy_db_12_500           | 16.79 | 17.54 | 23.16 |
+| naive_proxy_db_12_500          | 404.00 | 407.70 | 478.70 |
+| sql_lite_proxy_db_12_500       | 1061.00 | 1073.00 | 1727.00 |
+| venn_proxy_db_12_500           | 16.04 | 16.97 | 25.54 |
 
 Performance for Database with `100_000` records:
 
 | Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
 | --- | --- | --- | --- |
-| naive_proxy_db_100_000         | 3769.00 | 3882.00 | 5285.00 |
-| sql_lite_proxy_db_100_000      | 8334.00 | 8628.00 | 10070.00 |
-| venn_proxy_db_100_000          | 128.30 | 136.50 | 152.10 |
+| naive_proxy_db_100_000         | 3790.00 | 3837.00 | 5731.00 |
+| sql_lite_proxy_db_100_000      | 8219.00 | 8298.00 | 9424.00 |
+| venn_proxy_db_100_000          | 124.20 | 129.20 | 156.30 |
 
 We are not database nor hardware experts though. Please do open an issue if you think
 these benchmarks are incorrect or if related improvements can be made.
@@ -179,24 +199,24 @@ Allocations for Database with `100` records:
 
 | Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
 | --- | --- | --- | --- |
-| naive_proxy_db_100             | 0.38 | 0.38 | 0.38 |
-| sql_lite_proxy_db_100          | 4.53 | 4.53 | 4.53 |
+| naive_proxy_db_100             | 0.33 | 0.33 | 0.33 |
+| sql_lite_proxy_db_100          | 4.04 | 4.04 | 4.04 |
 | venn_proxy_db_100              | 0.05 | 0.05 | 0.05 |
 
 Allocations for Database with `12_500` records:
 
 | Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
 | --- | --- | --- | --- |
-| naive_proxy_db_12_500          | 40.22 | 40.22 | 40.22 |
-| sql_lite_proxy_db_12_500       | 5.02 | 5.03 | 5.03 |
+| naive_proxy_db_12_500          | 40.73 | 40.73 | 40.73 |
+| sql_lite_proxy_db_12_500       | 5.03 | 5.02 | 5.03 |
 | venn_proxy_db_12_500           | 3.15 | 3.15 | 3.15 |
 
 Allocations for Database with `100_000` records:
 
 | Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
 | --- | --- | --- | --- |
-| naive_proxy_db_100_000         | 324.00 | 324.00 | 324.00 |
-| sql_lite_proxy_db_100_000      | 5.02 | 5.02 | 5.03 |
+| naive_proxy_db_100_000         | 323.30 | 323.30 | 323.70 |
+| sql_lite_proxy_db_100_000      | 5.02 | 5.02 | 5.01 |
 | venn_proxy_db_100_000          | 25.02 | 25.02 | 25.02 |
 
 We are not database nor hardware experts though. Please do open an issue if you think
@@ -219,12 +239,20 @@ Please [open an issue](https://github.com/plabayo/venndb/issues) and also read [
 
 Alternatively you can also [join our Discord][discord-url] and start a conversation / discussion over there.
 
-> ❓ Can I use _any_ type for a `#[venndb(filter)]` property?
+> ❓ Can I use _whatever_ type for a `#[venndb(filter)]` property?
 
 Yes, as long as it implements `PartialEq + Eq + Hash + Clone`.
 That said, we do recommend that you use `enum` values if you can, or some other highly restricted form.
 
 Using for example a `String` directly is a bad idea as that would mean that `bE` != `Be` != `BE` != `Belgium` != `Belgique` != `België`. Even though these are really referring all to the same country. In such cases a much better idea is to at the very least create a wrapper type such as `struct Country(String)`, to allow you to enforce sanitization/validation when creating the value and ensuring the hashes will be the same for those values that are conceptually the same.
+
+> ❓ How do I make a filter optional?
+
+Both filters (`bool` properties) and filter maps (`T != bool` properties with the `#[venndb(filter)]` attribute)
+can be made optional by wrapping the types with `Option`, resulting in `Option<bool>` and `Option<T>`.
+
+Rows that have the `Option::None` value for such an optional column cannot filter on that property,
+but there is no other consequence beyond that.
 
 > ❓ Why can do keys have to be unique and non-optional?
 
@@ -235,6 +263,46 @@ As such it makes no sense for such keys to be:
 
 - duplicate: it would mean: as that can result in multiple rows or the wrong row to be returned;
 - optional: as that would mean the row cannot be looked up when the key is not defined;
+
+> ❓ How can I allow some rows to match for _any_ value of a certain (filter) column?
+
+Filter maps can allow to have a value to match all other values. It is up to you to declare the filter as such,
+and to also define for that type what the _one_ value to rule them all is.
+
+Usage:
+
+```rust,ignore
+use venndb::{Any, VennDB};
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Department {
+  Any,
+  Hr,
+  Engineering,
+}
+
+impl Any for Department {
+  fn is_any(&self) -> bool {
+    self == Department::Any
+  }
+}
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+  name: String,
+  #[venndb(filter, any)]
+  department: Department,
+}
+
+let db = EmployeeDB::from_iter([
+  Employee { name: "Jack".to_owned(), department: Department::Any },
+  Employee { name: "Derby".to_owned(), department: Department::Hr },
+]);
+let mut query = db.query();
+
+// will match Jack and Derby, as Jack is marked as Any, meaning it can work for w/e value
+let hr_employees: Vec<_> = query.department(Department::Hr).execute().unwrap().iter().collect();
+assert_eq!(hr_employees.len(), 2);
+```
 
 ## Example
 

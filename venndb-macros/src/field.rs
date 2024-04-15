@@ -88,10 +88,11 @@ impl<'a> StructField<'a> {
                 name: self.name,
                 optional: self.attrs.option_ty.is_some(),
             }),
-            FieldKind::FilterMap => FieldInfo::FilterMap(FilterMapField {
+            FieldKind::FilterMap { any } => FieldInfo::FilterMap(FilterMapField {
                 name: self.name,
                 ty: self.attrs.option_ty.unwrap_or(&self.field.ty),
                 optional: self.attrs.option_ty.is_some(),
+                any: *any,
             }),
         })
     }
@@ -101,6 +102,7 @@ pub struct FilterMapField<'a> {
     pub name: &'a Ident,
     pub ty: &'a syn::Type,
     pub optional: bool,
+    pub any: bool,
 }
 
 impl<'a> FilterMapField<'a> {
@@ -118,5 +120,13 @@ impl<'a> FilterMapField<'a> {
 
     pub fn filter_vec_name(&self) -> Ident {
         format_ident!("filter_vec_{}", self.name)
+    }
+
+    pub fn filter_any_name(&self) -> Option<Ident> {
+        if self.any {
+            Some(format_ident!("filter_any_{}", self.name))
+        } else {
+            None
+        }
     }
 }

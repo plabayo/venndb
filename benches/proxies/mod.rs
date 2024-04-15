@@ -1,6 +1,6 @@
 use sqlite::Row;
 use std::{borrow::Cow, ops::Deref};
-use venndb::VennDB;
+use venndb::{Any, VennDB};
 
 pub trait ProxyDB: Sized {
     fn create(n: usize) -> Self;
@@ -26,8 +26,8 @@ pub struct Proxy {
     pub residential: bool,
     pub mobile: bool,
     #[venndb(filter)]
-    pub pool: NormalizedString,
-    #[venndb(filter)]
+    pub pool: Option<NormalizedString>,
+    #[venndb(filter, any)]
     pub country: NormalizedString,
 }
 
@@ -37,6 +37,12 @@ pub struct NormalizedString(String);
 impl<S: AsRef<str>> From<S> for NormalizedString {
     fn from(s: S) -> Self {
         Self(s.as_ref().trim().to_lowercase())
+    }
+}
+
+impl Any for NormalizedString {
+    fn is_any(&self) -> bool {
+        self.0 == "*"
     }
 }
 
@@ -63,7 +69,10 @@ impl From<String> for Proxy {
             datacenter: parts.next().unwrap().parse().unwrap(),
             residential: parts.next().unwrap().parse().unwrap(),
             mobile: parts.next().unwrap().parse().unwrap(),
-            pool: parts.next().unwrap().into(),
+            pool: match parts.next().unwrap() {
+                "" => None,
+                s => Some(s.into()),
+            },
             country: parts.next().unwrap().into(),
         }
     }
@@ -130,7 +139,7 @@ impl ProxyDB for NaiveProxyDB {
         let found_proxies: Vec<_> = self
             .proxies
             .iter()
-            .filter(|p| p.tcp && p.pool == pool.into() && p.country == country.into())
+            .filter(|p| p.tcp && p.pool == Some(pool.into()) && p.country == country.into())
             .collect();
         if found_proxies.is_empty() {
             None
@@ -149,7 +158,7 @@ impl ProxyDB for NaiveProxyDB {
                 p.socks5
                     && p.datacenter
                     && p.residential
-                    && p.pool == pool.into()
+                    && p.pool == Some(pool.into())
                     && p.country == country.into()
             })
             .collect();
@@ -192,7 +201,7 @@ impl ProxyDB for SqlLiteProxyDB {
                 datacenter BOOLEAN NOT NULL,
                 residential BOOLEAN NOT NULL,
                 mobile BOOLEAN NOT NULL,
-                pool TEXT NOT NULL,
+                pool TEXT,
                 country TEXT NOT NULL
             )",
         )
@@ -203,7 +212,7 @@ impl ProxyDB for SqlLiteProxyDB {
             let proxy = Proxy::from(line.to_string());
             let statement = format!(
                 "INSERT INTO proxies (id, address, username, password, tcp, udp, http, socks5, datacenter, residential, mobile, pool, country)
-                VALUES ({}, '{}', '{}', '{}', {}, {}, {}, {}, {}, {}, {}, '{}', '{}')",
+                VALUES ({}, '{}', '{}', '{}', {}, {}, {}, {}, {}, {}, {}, {}, '{}')",
                 proxy.id,
                 proxy.address,
                 proxy.username,
@@ -215,7 +224,7 @@ impl ProxyDB for SqlLiteProxyDB {
                 proxy.datacenter as i32,
                 proxy.residential as i32,
                 proxy.mobile as i32,
-                proxy.pool.0,
+                proxy.pool.map_or("NULL".to_owned(), |s| format!("'{}'", s.deref())),
                 proxy.country.0,
             );
             conn.execute(&statement).unwrap();
@@ -283,7 +292,7 @@ fn proxy_from_sql_row(row: Row) -> Proxy {
         datacenter: row.read::<i64, _>("datacenter") != 0,
         residential: row.read::<i64, _>("residential") != 0,
         mobile: row.read::<i64, _>("mobile") != 0,
-        pool: row.read::<&str, _>("pool").into(),
+        pool: row.try_read::<&str, _>("pool").ok().map(Into::into),
         country: row.read::<&str, _>("country").into(),
     }
 }
