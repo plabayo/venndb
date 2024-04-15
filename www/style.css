@@ -62,7 +62,7 @@ main {
     justify-items: center;
 }
 
-#about {
+#about p {
     margin: 0 auto;
     padding: 10px;
 }
