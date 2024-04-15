@@ -29,6 +29,39 @@ pub trait Any {
     fn is_any(&self) -> bool;
 }
 
+impl<T: Any> Any for &T {
+    fn is_any(&self) -> bool {
+        T::is_any(*self)
+    }
+}
+
+impl<T: Any> Any for Option<T> {
+    fn is_any(&self) -> bool {
+        match self {
+            Some(value) => value.is_any(),
+            None => false,
+        }
+    }
+}
+
+impl<T: Any> Any for std::sync::Arc<T> {
+    fn is_any(&self) -> bool {
+        T::is_any(&**self)
+    }
+}
+
+impl<T: Any> Any for std::rc::Rc<T> {
+    fn is_any(&self) -> bool {
+        T::is_any(&**self)
+    }
+}
+
+impl<T: Any> Any for Box<T> {
+    fn is_any(&self) -> bool {
+        T::is_any(&**self)
+    }
+}
+
 #[doc(hidden)]
 pub mod __internal {
     //! Hidden thirdparty dependencies for venndb,

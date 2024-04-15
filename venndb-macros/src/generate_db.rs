@@ -418,7 +418,7 @@ fn generate_db_struct_method_append(
                 };
                 let is_any_value = if field.optional {
                     quote! {
-                        data.#name.map(|v| ::venndb::Any::is_any(&v)).unwrap_or_default()
+                        data.#name.as_ref().map(|v| ::venndb::Any::is_any(v)).unwrap_or_default()
                     }
                 } else {
                     quote! {
@@ -761,7 +761,7 @@ fn generate_query_struct_impl(
                 let value_filter = match field.filter_any_name() {
                     Some(name) => {
                         quote! {
-                            if ::venndb::Any::is_any(value) {
+                            if ::venndb::Any::is_any(&value) {
                                 filter &= &self.db.#name;
                             } else {
                                 #value_filter

@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
-use venndb::VennDB;
+use venndb::{Any, VennDB};
 
 #[derive(Clone, Debug, Arbitrary, VennDB)]
 pub struct Employee {
@@ -13,7 +13,7 @@ pub struct Employee {
     alive: Option<bool>,
     #[venndb(filter)]
     faction: Faction,
-    #[venndb(filter)]
+    #[venndb(filter, any)]
     planet: Option<Planet>,
 }
 
@@ -25,8 +25,15 @@ pub enum Faction {
 
 #[derive(Clone, Debug, Arbitrary, PartialEq, Eq, Hash)]
 pub enum Planet {
+    Any,
     Earth,
     Mars,
+}
+
+impl Any for Planet {
+    fn is_any(&self) -> bool {
+        self == &Planet::Any
+    }
 }
 
 fuzz_target!(|rows: Vec<Employee>| {
