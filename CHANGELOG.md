@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# 0.3.0 (2024-04-18)
+
+Breaking changes:
+
+* [[`#6`](https://github.com/plabayo/venndb/issues/6)] query filter maps now accept arguments as `impl Into<T>` instead of `T`,
+  this can be a breaking change for users that were inserting them as `value.into()`,
+  as the compiler will for these cases now give a compile time error due to the now introduced ambiguity;
+  * Migration is as easy as removing the manual `.into()` (like) calls that you previously had to add yourself;
+
+Bug Fixes from [0.2.1](#021-2024-04-15):
+
+* [[`#5`](https://github.com/plabayo/venndb/issues/5)] any filters now also allow rows to match on unknown filter map variants.
+  * e.g. if you have a `MyType` filter map and have not a single row that has `"foo"` as value,
+    then all rows that that have a value for which `assert!(Any::is_any(value: MyType))` will still work.
+  * prior to this bug fix these values could not be matched on, and the `any` rows would only hit
+    if there were also rows that had that value explicitly defined.
+
 # 0.2.1 (2024-04-15)
 
 A backwards compatible patch for [v0.2.0](#020-2024-04-15),

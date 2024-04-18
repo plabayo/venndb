@@ -999,3 +999,56 @@ mod tests_v0_2_1 {
         assert_eq!(results[1].id, 3);
     }
 }
+
+#[cfg(test)]
+mod tests_v0_2_2 {
+    use super::*;
+
+    #[derive(Debug, VennDB)]
+    pub struct Worker {
+        #[venndb(key)]
+        id: u32,
+        is_admin: bool,
+        is_active: Option<bool>,
+        #[venndb(filter, any)]
+        department: Option<Department>,
+    }
+
+    // regression test: <https://github.com/plabayo/venndb/issues/5>
+    #[test]
+    fn test_any_row_optional_filter_map_white_rabbit() {
+        let db = WorkerDB::from_rows(vec![
+            Worker {
+                id: 1,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Engineering),
+            },
+            Worker {
+                id: 2,
+                is_admin: false,
+                is_active: None,
+                department: None,
+            },
+            Worker {
+                id: 3,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Any),
+            },
+            Worker {
+                id: 4,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::HR),
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Marketing);
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, 3);
+    }
+}

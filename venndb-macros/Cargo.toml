@@ -9,7 +9,7 @@ repository = "https://github.com/plabayo/venndb"
 keywords = ["database", "db", "memory", "bits"]
 categories = ["database", "db"]
 authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
-version = "0.2.1"
+version = "0.3.0"
 rust-version = "1.75.0"
 
 [package.metadata.docs.rs]

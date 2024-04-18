@@ -397,8 +397,14 @@ fn generate_db_struct_method_append(
                 };
 
                 let filter_any_register = match field.filter_any_name() {
-                    Some(name) => quote! {
-                       self.#name.push(::venndb::Any::is_any(&value));
+                    Some(any_vec) => if field.optional {
+                        quote! {
+                            self.#any_vec.push(data.#name.as_ref().map(::venndb::Any::is_any).unwrap_or_default());
+                        }
+                    } else {
+                        quote! {
+                            self.#any_vec.push(::venndb::Any::is_any(&data.#name));
+                        }
                     },
                     None => quote! {},
                 };
@@ -441,9 +447,9 @@ fn generate_db_struct_method_append(
 
                 if field.optional {
                     quote! {
+                        #filter_any_register
                         let #filter_index = match data.#name.clone() {
                             Some(value) => {
-                                #filter_any_register
                                 Some(match self.#filter_map_name.entry(value) {
                                     ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
                                     ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
@@ -462,9 +468,8 @@ fn generate_db_struct_method_append(
                     }
                 } else {
                     quote! {
-                        let value = data.#name.clone();
                         #filter_any_register
-                        let #filter_index = match self.#filter_map_name.entry(value) {
+                        let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
                             ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
                             ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
                                 let vec_index = self.#filter_vec_name.len();
@@ -700,8 +705,8 @@ fn generate_query_struct_impl(
                 );
                 Some(quote! {
                     #[doc=#doc]
-                    #vis fn #name(&mut self, value: #ty) -> &mut Self {
-                        self.#name = Some(value);
+                    #vis fn #name(&mut self, value: impl::std::convert::Into<#ty>) -> &mut Self {
+                        self.#name = Some(value.into());
                         self
                     }
                 })
@@ -752,20 +757,21 @@ fn generate_query_struct_impl(
                 let name = field.name();
                 let filter_map_name: Ident = field.filter_map_name();
                 let filter_vec_name: Ident = field.filter_vec_name();
-                let value_filter = quote! {
-                    match self.db.#filter_map_name.get(value) {
-                        Some(index) => filter &= &self.db.#filter_vec_name[*index],
-                        None => return None,
-                    };
-                };
-                let value_filter = if field.any {
-                    quote! {
+                let value_filter = match field.filter_any_name() {
+                    Some(filter_any_vec) => quote! {
                         if !::venndb::Any::is_any(&value) {
-                            #value_filter
+                            match self.db.#filter_map_name.get(value) {
+                                Some(index) => filter &= &self.db.#filter_vec_name[*index],
+                                None => filter &= &self.db.#filter_any_vec,
+                            };
                         }
-                    }
-                } else {
-                    value_filter
+                    },
+                    None => quote! {
+                        match self.db.#filter_map_name.get(value) {
+                            Some(index) => filter &= &self.db.#filter_vec_name[*index],
+                            None => return None,
+                        };
+                    },
                 };
                 Some(quote! {
                     // Filter by the filterm ap below, only if it is defined as Some(_).

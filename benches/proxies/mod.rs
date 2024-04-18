@@ -94,7 +94,7 @@ impl ProxyDB for InMemProxyDB {
 
     fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
         let mut query = self.query();
-        query.tcp(true).pool(pool.into()).country(country.into());
+        query.tcp(true).pool(pool).country(country);
         query.execute().map(|result| {
             let proxy_ref = result.any();
             Cow::Borrowed(proxy_ref)
@@ -107,8 +107,8 @@ impl ProxyDB for InMemProxyDB {
             .socks5(true)
             .datacenter(true)
             .residential(true)
-            .pool(pool.into())
-            .country(country.into());
+            .pool(pool)
+            .country(country);
         query.execute().map(|result| {
             let proxy_ref = result.any();
             Cow::Borrowed(proxy_ref)
