@@ -30,7 +30,7 @@ pub struct Value {
 }
 
 fn my_validator_fn(value: &Value) -> bool {
-    !foo.is_empty() && value.bar > 0
+    !value.foo.is_empty() && value.bar > 0
 }
 
 let mut db = MyDB::default();
