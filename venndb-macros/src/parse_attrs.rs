@@ -157,6 +157,7 @@ fn is_bool(ty: &syn::Type) -> bool {
 #[derive(Default)]
 pub struct TypeAttrs {
     pub name: Option<syn::LitStr>,
+    pub validator: Option<syn::Path>,
 }
 
 impl TypeAttrs {
@@ -176,6 +177,10 @@ impl TypeAttrs {
                 if name.is_ident("name") {
                     if let Some(m) = errors.expect_meta_name_value(&meta) {
                         this.name = errors.expect_lit_str(&m.value).cloned();
+                    }
+                } else if name.is_ident("validator") {
+                    if let Some(m) = errors.expect_meta_name_value(&meta) {
+                        this.validator = errors.expect_path(&m.value).cloned();
                     }
                 } else {
                     errors.err(

@@ -5,9 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# 0.4.0 (2024-04-19)
+
+Breaking Changes:
+
+* [[`#7`](https://github.com/plabayo/venndb/issues/7)]: correct the behaviour of any filter map query values:
+  - When using an any value as a query filter map value it will now only match rows
+    which have an any value registered for the row;
+  - Prior to this release it was matching on all rows, as if the filter wasn't defined.
+    This seemed correct when deciding on it, but on hindsight is is incorrect behaviour.
+
+New Features:
+
+* [[`#8`](https://github.com/plabayo/venndb/issues/8)]: support custom validations of rows prior to appending them
+
+Example:
+
+```rust
+#[derive(Debug, VennDB)]
+#[venndb(name = "MyDB", validator = my_validator_fn)]
+pub struct Value {
+   pub foo: String,
+   pub bar: u32,
+}
+
+fn my_validator_fn(value: &Value) -> bool {
+    !value.foo.is_empty() && value.bar > 0
+}
+
+let mut db = MyDB::default();
+assert!(db.append(Value {
+    foo: "".to_owned(),
+    bar: 42,
+}).is_err()); // fails because foo == empty
+```
+
 # 0.3.0 (2024-04-18)
 
-Breaking changes:
+Breaking Changes:
 
 * [[`#6`](https://github.com/plabayo/venndb/issues/6)] query filter maps now accept arguments as `impl Into<T>` instead of `T`,
   this can be a breaking change for users that were inserting them as `value.into()`,

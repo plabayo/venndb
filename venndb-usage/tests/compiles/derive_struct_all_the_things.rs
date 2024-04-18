@@ -1,7 +1,7 @@
 use venndb::{Any, VennDB};
 
 #[derive(Debug, VennDB)]
-#[venndb(name = "EmployeeSheet")]
+#[venndb(name = "EmployeeSheet", validator = employee_validator)]
 struct Employee {
     #[venndb(key)]
     id: u32,
@@ -25,6 +25,10 @@ pub enum Department {
     Sales,
     Marketing,
     HR,
+}
+
+fn employee_validator(employee: &Employee) -> bool {
+    employee.id > 0 && !employee.name.is_empty()
 }
 
 impl Any for Department {

@@ -92,7 +92,13 @@ fn impl_from_args_struct(
         None => format_ident!("{}DB", name),
     };
 
-    let db_code = generate_db::generate_db(name, &name_db, vis, &fields[..]);
+    let db_code = generate_db::generate_db(
+        name,
+        &name_db,
+        type_attrs.validator.as_ref(),
+        vis,
+        &fields[..],
+    );
 
     quote! {
         #db_code

@@ -1,0 +1,5 @@
+error: Expected path attribute, found "employee_validator" attribute (literal)
+ --> tests/fails/derive_struct_with_validator_str.rs:4:22
+  |
+4 | #[venndb(validator = "employee_validator")]
+  |                      ^^^^^^^^^^^^^^^^^^^^

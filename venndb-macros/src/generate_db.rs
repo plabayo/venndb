@@ -1,21 +1,23 @@
 use crate::field::{FieldInfo, StructField};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use syn::Ident;
+use syn::{Ident, Path};
 
 /// Generate the venndb logic
 pub fn generate_db(
     name: &Ident,
     name_db: &Ident,
+    validator: Option<&Path>,
     vis: &syn::Visibility,
     fields: &[StructField],
 ) -> TokenStream {
     let fields: Vec<_> = fields.iter().filter_map(StructField::info).collect();
 
-    let db_error = DbError::new(&fields[..]);
+    let db_error = DbError::new(validator, &fields[..]);
 
     let db_struct = generate_db_struct(name, name_db, vis, &fields[..]);
-    let db_struct_methods = generate_db_struct_methods(name, name_db, vis, &db_error, &fields[..]);
+    let db_struct_methods =
+        generate_db_struct_methods(name, name_db, validator, vis, &db_error, &fields[..]);
 
     let db_query = generate_query_struct(name, name_db, vis, &fields[..]);
 
@@ -92,6 +94,7 @@ fn generate_db_struct(
 fn generate_db_struct_methods(
     name: &Ident,
     name_db: &Ident,
+    validator: Option<&Path>,
     vis: &syn::Visibility,
     db_error: &DbError,
     fields: &[FieldInfo],
@@ -101,7 +104,8 @@ fn generate_db_struct_methods(
     let method_from_rows =
         generate_db_struct_method_from_rows(name, name_db, vis, db_error, fields);
     let field_methods = generate_db_struct_field_methods(name, name_db, vis, fields);
-    let method_append = generate_db_struct_method_append(name, name_db, vis, db_error, fields);
+    let method_append =
+        generate_db_struct_method_append(name, name_db, validator, vis, db_error, fields);
 
     quote! {
         #[allow(clippy::unused_unit)]
@@ -315,6 +319,7 @@ fn generate_db_struct_method_from_rows(
 fn generate_db_struct_method_append(
     name: &Ident,
     name_db: &Ident,
+    validator: Option<&Path>,
     vis: &syn::Visibility,
     db_error: &DbError,
     fields: &[FieldInfo],
@@ -324,6 +329,18 @@ fn generate_db_struct_method_append(
         "Extend the database with the given iterator of items that can be turned into [`{}`] instances.",
         name
     );
+
+    let validator_check = match validator {
+        Some(validator) => {
+            let err = DbError::generate_invalid_row_error_kind_creation(name_db);
+            quote! {
+                if !#validator(&data) {
+                    return Err(#err);
+                }
+            }
+        }
+        None => quote! {},
+    };
 
     let db_field_insert_checks: Vec<_> = fields
         .iter()
@@ -538,6 +555,7 @@ fn generate_db_struct_method_append(
         }
 
         fn append_internal(&mut self, data: &#name, index: usize) -> #append_kind_return_type {
+            #validator_check
             #(#db_field_insert_checks)*
             #(#db_field_insert_commits)*
             #append_return_output
@@ -759,7 +777,9 @@ fn generate_query_struct_impl(
                 let filter_vec_name: Ident = field.filter_vec_name();
                 let value_filter = match field.filter_any_name() {
                     Some(filter_any_vec) => quote! {
-                        if !::venndb::Any::is_any(&value) {
+                        if ::venndb::Any::is_any(&value) {
+                            filter &= &self.db.#filter_any_vec;
+                        } else {
                             match self.db.#filter_map_name.get(value) {
                                 Some(index) => filter &= &self.db.#filter_vec_name[*index],
                                 None => filter &= &self.db.#filter_any_vec,
@@ -954,6 +974,7 @@ struct DbError {
 #[derive(Debug)]
 enum DbErrorKind {
     DuplicateKey,
+    InvalidRow,
 }
 
 impl ToTokens for DbErrorKind {
@@ -965,18 +986,27 @@ impl ToTokens for DbErrorKind {
                     DuplicateKey,
                 });
             }
+            Self::InvalidRow => {
+                tokens.extend(quote! {
+                    /// The error kind for when the row to be inserted is invalid.
+                    InvalidRow,
+                });
+            }
         }
     }
 }
 
 impl DbError {
-    fn new(fields: &[FieldInfo]) -> Self {
-        let error_duplicate_key = fields.iter().any(|info| matches!(info, FieldInfo::Key(_)));
-        let error_kinds = if error_duplicate_key {
-            vec![DbErrorKind::DuplicateKey]
-        } else {
-            Vec::new()
-        };
+    fn new(validator: Option<&Path>, fields: &[FieldInfo]) -> Self {
+        let mut error_kinds = Vec::new();
+
+        if validator.is_some() {
+            error_kinds.push(DbErrorKind::InvalidRow);
+        }
+
+        if fields.iter().any(|info| matches!(info, FieldInfo::Key(_))) {
+            error_kinds.push(DbErrorKind::DuplicateKey);
+        }
 
         Self { error_kinds }
     }
@@ -985,6 +1015,13 @@ impl DbError {
         let ident_error_kind = format_ident!("{}ErrorKind", name_db);
         quote! {
             #ident_error_kind::DuplicateKey
+        }
+    }
+
+    fn generate_invalid_row_error_kind_creation(name_db: &Ident) -> TokenStream {
+        let ident_error_kind = format_ident!("{}ErrorKind", name_db);
+        quote! {
+            #ident_error_kind::InvalidRow
         }
     }
 
