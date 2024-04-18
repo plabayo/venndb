@@ -759,7 +759,9 @@ fn generate_query_struct_impl(
                 let filter_vec_name: Ident = field.filter_vec_name();
                 let value_filter = match field.filter_any_name() {
                     Some(filter_any_vec) => quote! {
-                        if !::venndb::Any::is_any(&value) {
+                        if ::venndb::Any::is_any(&value) {
+                            filter &= &self.db.#filter_any_vec;
+                        } else {
                             match self.db.#filter_map_name.get(value) {
                                 Some(index) => filter &= &self.db.#filter_vec_name[*index],
                                 None => filter &= &self.db.#filter_any_vec,
