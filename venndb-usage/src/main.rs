@@ -3,6 +3,7 @@
 use venndb::{Any, VennDB};
 
 #[derive(Debug, VennDB)]
+#[venndb(validator = employee_validator)]
 pub struct Employee {
     #[venndb(key)]
     id: u32,
@@ -13,6 +14,10 @@ pub struct Employee {
     is_active: bool,
     #[venndb(filter, any)]
     department: Department,
+}
+
+fn employee_validator(employee: &Employee) -> bool {
+    employee.id > 0
 }
 
 #[derive(Debug)]
@@ -1064,6 +1069,7 @@ mod tests_v0_4 {
     use super::*;
 
     #[derive(Debug, VennDB)]
+    #[venndb(validator = worker_validator)]
     pub struct Worker {
         #[venndb(key)]
         id: u32,
@@ -1071,6 +1077,10 @@ mod tests_v0_4 {
         is_active: Option<bool>,
         #[venndb(filter, any)]
         department: Option<Department>,
+    }
+
+    fn worker_validator(worker: &Worker) -> bool {
+        worker.id > 0 && (worker.is_active.unwrap_or_default() || !worker.is_admin)
     }
 
     #[test]
@@ -1193,5 +1203,151 @@ mod tests_v0_4 {
 
         let employee = query.execute().unwrap().any();
         assert_eq!(employee.id, 2);
+    }
+
+    #[test]
+    fn test_worker_db_valid_rows_append() {
+        let mut db = WorkerDB::default();
+
+        db.append(Worker {
+            id: 1,
+            is_admin: false,
+            is_active: Some(true),
+            department: Some(Department::Engineering),
+        })
+        .unwrap();
+
+        db.append(Worker {
+            id: 2,
+            is_admin: false,
+            is_active: None,
+            department: None,
+        })
+        .unwrap();
+
+        db.append(Worker {
+            id: 3,
+            is_admin: false,
+            is_active: Some(true),
+            department: Some(Department::Any),
+        })
+        .unwrap();
+
+        db.append(Worker {
+            id: 4,
+            is_admin: true,
+            is_active: Some(true),
+            department: Some(Department::HR),
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_worker_db_valid_rows_from_iter() {
+        WorkerDB::from_iter([
+            Worker {
+                id: 1,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Engineering),
+            },
+            Worker {
+                id: 2,
+                is_admin: false,
+                is_active: None,
+                department: None,
+            },
+            Worker {
+                id: 3,
+                is_admin: false,
+                is_active: Some(true),
+                department: Some(Department::Any),
+            },
+            Worker {
+                id: 4,
+                is_admin: true,
+                is_active: Some(true),
+                department: Some(Department::HR),
+            },
+        ])
+        .unwrap();
+    }
+
+    #[test]
+    fn test_worker_db_invalid_rows_append() {
+        let mut db = WorkerDB::default();
+
+        assert_eq!(
+            WorkerDBErrorKind::InvalidRow,
+            db.append(Worker {
+                id: 0,
+                is_admin: false,
+                is_active: None,
+                department: Some(Department::Engineering),
+            })
+            .unwrap_err()
+            .kind()
+        );
+
+        assert_eq!(
+            WorkerDBErrorKind::InvalidRow,
+            db.append(Worker {
+                id: 1,
+                is_admin: true,
+                is_active: Some(false),
+                department: Some(Department::Engineering),
+            })
+            .unwrap_err()
+            .kind()
+        );
+
+        assert_eq!(
+            WorkerDBErrorKind::InvalidRow,
+            db.append(Worker {
+                id: 2,
+                is_admin: true,
+                is_active: None,
+                department: Some(Department::Engineering),
+            })
+            .unwrap_err()
+            .kind()
+        );
+    }
+
+    #[test]
+    fn test_worker_db_invalid_rows_from_iter() {
+        assert_eq!(
+            WorkerDBErrorKind::InvalidRow,
+            WorkerDB::from_iter(
+                [Worker {
+                    id: 0,
+                    is_admin: false,
+                    is_active: None,
+                    department: Some(Department::Engineering),
+                },]
+                .into_iter(),
+            )
+            .unwrap_err()
+            .kind()
+        );
+    }
+
+    #[test]
+    fn test_employee_db_append_invalid_row() {
+        let mut db = EmployeeDB::default();
+
+        assert_eq!(
+            EmployeeDBErrorKind::InvalidRow,
+            db.append(Employee {
+                id: 0,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            })
+            .unwrap_err()
+            .kind()
+        );
     }
 }
