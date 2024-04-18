@@ -64,7 +64,7 @@ fn main() {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_v0_1 {
     use super::*;
 
     #[test]
@@ -1001,7 +1001,7 @@ mod tests_v0_2_1 {
 }
 
 #[cfg(test)]
-mod tests_v0_2_2 {
+mod tests_v0_3_0 {
     use super::*;
 
     #[derive(Debug, VennDB)]

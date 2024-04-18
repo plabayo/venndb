@@ -304,6 +304,89 @@ let hr_employees: Vec<_> = query.department(Department::Hr).execute().unwrap().i
 assert_eq!(hr_employees.len(), 2);
 ```
 
+> ❓ How can I provide custom validation of rows prior to them getting appended?
+
+Is is possible to validate a row based on one or multiple of its properties? Validate in function of relationship
+between multiple properties? Is it possible to provide custom validation to prevent rows
+from getting appended that do not adhere to custom validation rules?
+
+Yes to all of the above.
+
+Example:
+
+```rust,ignore
+#[derive(Debug, VennDB)]
+#[venndb(validatator = "my_validator_fn")]
+pub struct Value {
+   pub foo: String,
+   pub bar: u32,
+}
+
+fn my_validator_fn(value: &Value) -> bool {
+    !value.foo.is_empty() && value.bar > 0
+}
+
+let mut db = ValueDB::default();
+assert!(db.append(Value {
+    foo: "".to_owned(),
+    bar: 42,
+}).is_err()); // fails because foo == empty
+```
+
+> ❓ Why do `any` filter values only match rows that have an `any` value for that property?
+
+Let's say I have the following `struct`:
+
+```rust,ignore
+use venndb::{Any, VennDB};
+
+#[derive(Debug, VennDB)]
+pub struct Value {
+   #[venndb(filter, any)]
+   pub foo: MyString,
+   pub bar: u32,
+}
+
+#[derive(Debug)]
+pub struct MyString(String);
+
+impl Any for MyString {
+    fn is_any(&self) -> bool {
+        self.0 == "*"
+    }
+}
+
+let db = ValueDB::from_iter([
+    Value {
+        foo: MyString("foo".to_owned()),
+        bar: 8,
+    },
+    Value {
+        foo: MyString("*".to_owned()),
+        bar: 16,
+    }
+].into_Iter()).unwrap();
+
+let mut query = db.query();
+query.foo(MyString("*".to_owned()));
+let value = query.execute().unwrap().any();
+// this will never match the row with bar == 8,
+// tiven foo != an any value
+assert_eq!(value.bar, 16);
+```
+
+Why is this true? Beacuse it is correct.
+
+Allowing it also to match the value `foo` would unfairly
+give more chances for `foo` to be selected over the _any_ value.
+This might not seem like a big difference, but it is. Because what if
+we generate a random string for `Value`s with an _any value? If we
+would allow all rows to be matched then that logic is now rigged,
+with a value of `foo` being more likely then other strings.
+
+As such the only correct answer when filtering for _any_ value,
+is to return rows that have _any_ value.
+
 ## Example
 
 Here follows an example demonstrating all the features of `VennDB`.
