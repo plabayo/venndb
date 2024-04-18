@@ -316,7 +316,7 @@ Example:
 
 ```rust,ignore
 #[derive(Debug, VennDB)]
-#[venndb(validatator = "my_validator_fn")]
+#[venndb(validator = my_validator_fn)]
 pub struct Value {
    pub foo: String,
    pub bar: u32,

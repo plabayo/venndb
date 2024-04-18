@@ -23,7 +23,7 @@ Example:
 
 ```rust
 #[derive(Debug, VennDB)]
-#[venndb(name = "MyDB", validatator = "my_validator_fn")]
+#[venndb(name = "MyDB", validator = my_validator_fn)]
 pub struct Value {
    pub foo: String,
    pub bar: u32,

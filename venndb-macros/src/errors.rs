@@ -62,6 +62,15 @@ impl Errors {
         ),
     ];
 
+    pub fn expect_path<'a>(&self, e: &'a syn::Expr) -> Option<&'a syn::Path> {
+        if let syn::Expr::Path(path) = e {
+            Some(&path.path)
+        } else {
+            self.unexpected_value("path", e);
+            None
+        }
+    }
+
     fn unexpected_lit(&self, expected: &str, found: &syn::Expr) {
         fn lit_kind(lit: &syn::Lit) -> &'static str {
             use syn::Lit::{Bool, Byte, ByteStr, Char, Float, Int, Str, Verbatim};
@@ -121,6 +130,73 @@ impl Errors {
                 " attribute, found ",
                 meta_kind(found),
                 " attribute",
+            ]
+            .concat(),
+        )
+    }
+
+    fn unexpected_value(&self, expected: &str, found: &syn::Expr) {
+        fn expr_kind(expr: &syn::Expr) -> &'static str {
+            use syn::Expr::{
+                Array, Assign, Async, Await, Binary, Block, Break, Call, Cast, Closure, Const,
+                Continue, Field, ForLoop, Group, If, Index, Infer, Let, Lit, Loop, Macro, Match,
+                MethodCall, Paren, Path, Range, Reference, Repeat, Return, Struct, Try, TryBlock,
+                Tuple, Unary, Unsafe, Verbatim, While, Yield,
+            };
+            match expr {
+                Array(_) => "array",
+                Assign(_) => "assignment",
+                Async(_) => "async block",
+                Await(_) => "await",
+                Binary(_) => "binary operation",
+                Block(_) => "block",
+                Break(_) => "break",
+                Call(_) => "function call",
+                Cast(_) => "cast",
+                Closure(_) => "closure",
+                Const(_) => "const",
+                Continue(_) => "continue",
+                Field(_) => "field access",
+                ForLoop(_) => "for loop",
+                Group(_) => "group",
+                If(_) => "if",
+                Index(_) => "index",
+                Infer(_) => "inferred type",
+                Let(_) => "let",
+                Lit(_) => "literal",
+                Loop(_) => "loop",
+                Macro(_) => "macro",
+                Match(_) => "match",
+                MethodCall(_) => "method call",
+                Paren(_) => "parentheses",
+                Path(_) => "path",
+                Range(_) => "range",
+                Reference(_) => "reference",
+                Repeat(_) => "repeat",
+                Return(_) => "return",
+                Struct(_) => "struct",
+                Try(_) => "try",
+                TryBlock(_) => "try block",
+                Tuple(_) => "tuple",
+                Unary(_) => "unary operation",
+                Unsafe(_) => "unsafe block",
+                Verbatim(_) => "verbatim",
+                While(_) => "while",
+                Yield(_) => "yield",
+                _ => "unknown expression kind",
+            }
+        }
+
+        self.err(
+            found,
+            &[
+                "Expected ",
+                expected,
+                " attribute, found ",
+                found.to_token_stream().to_string().as_str(),
+                " attribute (",
+                expr_kind(found),
+                ")",
             ]
             .concat(),
         )
