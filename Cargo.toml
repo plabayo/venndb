@@ -28,7 +28,7 @@ venndb-macros = { version = "0.4.0", path = "venndb-macros" }
 [dev-dependencies]
 divan = "0.1.14"
 itertools = "0.12.1"
-sqlite = "0.34.0"
+sqlite = "0.35.0"
 
 [[bench]]
 name = "proxydb"
