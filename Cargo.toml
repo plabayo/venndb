@@ -27,7 +27,7 @@ venndb-macros = { version = "0.4.0", path = "venndb-macros" }
 
 [dev-dependencies]
 divan = "0.1.14"
-itertools = "0.12.1"
+itertools = "0.13.0"
 sqlite = "0.36.0"
 
 [[bench]]
