@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# 0.5.0 (2024-05-23)
+
+New Features:
+
+- [[`#15`](https://github.com/plabayo/venndb/issues/15)]: support multi dimensional filter options to be filtered in group
+
+Example:
+
+```rust
+use venndb::{Any, VennDB};
+
+#[derive(Debug, VennDB)]
+pub struct Value {
+   #[venndb(filter)]
+   pub foo: String,
+   pub bar: u32,
+}
+
+let db = ValueDB::from_iter([
+    Value {
+        foo: "a".to_owned(),
+        bar: 8,
+    },
+    Value {
+        foo: "b".to_owned(),
+        bar: 12,
+    },
+    Value {
+        foo: "c".to_owned(),
+        bar: 16,
+    },
+].into_Iter()).unwrap();
+
+let mut query = db.query();
+query.foo(MyString("a".to_owned()));
+query.foo(MyString("c".to_owned()));
+let values: Vec<_> = query.execute().unwrap().iter().collect();
+assert_eq!(values.len(), 2);
+assert_eq!(values[0].bar, 8);
+assert_eq!(values[0].bar, 16);
+```
+
 # 0.4.0 (2024-04-19)
 
 Breaking Changes:

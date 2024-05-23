@@ -387,6 +387,47 @@ with a value of `foo` being more likely then other strings.
 As such the only correct answer when filtering for _any_ value,
 is to return rows that have _any_ value.
 
+> ❓ How can I query on multiple variants of a "filter map" property?
+
+Just call the _query_ method multiple times. It will allow you to match
+rows that have either of these values.
+
+Example
+
+```rust,ignore
+use venndb::{Any, VennDB};
+
+#[derive(Debug, VennDB)]
+pub struct Value {
+   #[venndb(filter)]
+   pub foo: String,
+   pub bar: u32,
+}
+
+let db = ValueDB::from_iter([
+    Value {
+        foo: "a".to_owned(),
+        bar: 8,
+    },
+    Value {
+        foo: "b".to_owned(),
+        bar: 12,
+    },
+    Value {
+        foo: "c".to_owned(),
+        bar: 16,
+    },
+].into_Iter()).unwrap();
+
+let mut query = db.query();
+query.foo(MyString("a".to_owned()));
+query.foo(MyString("c".to_owned()));
+let values: Vec<_> = query.execute().unwrap().iter().collect();
+assert_eq!(values.len(), 2);
+assert_eq!(values[0].bar, 8);
+assert_eq!(values[0].bar, 16);
+```
+
 ## Example
 
 Here follows an example demonstrating all the features of `VennDB`.
@@ -755,7 +796,7 @@ Query (e.g. `EmployeeInMemDBQuery`)
 | `EmployeeInMemDBQuery::reset(&mut self) -> &mut Self` | reset the query, bringing it back to the clean state it has on creation |
 | `EmployeeInMemDBQuery::execute(&self) -> Option<EmployeeInMemDBQueryResult<'a>>` | return the result of the query using the set filters. It will be `None` in case no rows matched the defined filters. Or put otherwise, the result will contain at least one row when `Some(_)` is returned. |
 | `EmployeeInMemDBQuery::is_manager(&mut self, value: bool) -> &mut Self` | a filter setter for a `bool` filter. One such method per `bool` filter (that isn't `skip`ped) will be available. E.g. if you have ` foo` filter then there will be a `EmployeeInMemDBQuery:foo` method. For _bool_ filters that are optional (`Option<bool>`) this method is also generated just the same. |
-| `EmployeeInMemDBQuery::department(&mut self, value: impl ::std::convert::Into<Department>) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. Filter maps that have a `Option<T>` type have exactly the same signature. |
+| `EmployeeInMemDBQuery::department(&mut self, value: impl ::std::convert::Into<Department>) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. Filter maps that have a `Option<T>` type have exactly the same signature. Duering query you can call this method multiple times in case you wish to allow multiple variants. |
 
 Query Result (e.g. `EmployeeInMemDBQueryResult`)
 

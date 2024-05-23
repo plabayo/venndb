@@ -623,7 +623,7 @@ fn generate_query_struct(
                 let name = field.name();
                 let ty = field.ty();
                 Some(quote! {
-                    #name: Option<#ty>,
+                    #name: Vec<#ty>,
                 })
             }
             FieldInfo::Key(_) => None,
@@ -646,7 +646,7 @@ fn generate_query_struct(
             FieldInfo::FilterMap(field) => {
                 let name = field.name();
                 Some(quote! {
-                    #name: None,
+                    #name: Vec::new(),
                 })
             }
             FieldInfo::Key(_) => None,
@@ -724,7 +724,7 @@ fn generate_query_struct_impl(
                 Some(quote! {
                     #[doc=#doc]
                     #vis fn #name(&mut self, value: impl::std::convert::Into<#ty>) -> &mut Self {
-                        self.#name = Some(value.into());
+                        self.#name.push(value.into());
                         self
                     }
                 })
@@ -745,7 +745,7 @@ fn generate_query_struct_impl(
             FieldInfo::FilterMap(field) => {
                 let name = field.name();
                 Some(quote! {
-                    self.#name = None;
+                    self.#name.clear();
                 })
             }
             FieldInfo::Key(_) => None,
@@ -775,7 +775,8 @@ fn generate_query_struct_impl(
                 let name = field.name();
                 let filter_map_name: Ident = field.filter_map_name();
                 let filter_vec_name: Ident = field.filter_vec_name();
-                let value_filter = match field.filter_any_name() {
+                // used if only one value is set, making it more efficient
+                let value_filter_one = match field.filter_any_name() {
                     Some(filter_any_vec) => quote! {
                         if ::venndb::Any::is_any(&value) {
                             filter &= &self.db.#filter_any_vec;
@@ -793,13 +794,43 @@ fn generate_query_struct_impl(
                         };
                     },
                 };
+                // used if multiple values are set, requires an extra alloc
+                let value_filter_multi = match field.filter_any_name() {
+                    Some(filter_any_vec) => quote! {
+                        if ::venndb::Any::is_any(&value) {
+                            inter_filter |= &self.db.#filter_any_vec;
+                        } else {
+                            match self.db.#filter_map_name.get(value) {
+                                Some(index) => inter_filter |= &self.db.#filter_vec_name[*index],
+                                None => inter_filter |= &self.db.#filter_any_vec,
+                            };
+                        }
+                    },
+                    None => quote! {
+                        match self.db.#filter_map_name.get(value) {
+                            Some(index) => inter_filter |= &self.db.#filter_vec_name[*index],
+                            None => return None,
+                        };
+                    },
+                };
+                // apply the filter
                 Some(quote! {
                     // Filter by the filterm ap below, only if it is defined as Some(_).
                     // If there is no filter matched to the given value then the search is over,
                     // and we early return None.
-
-                    if let Some(value) = &self.#name {
-                        #value_filter
+                    match &self.#name.len() {
+                        0 => (),
+                        1 => {
+                            let value = &self.#name[self.#name.len() - 1];
+                            #value_filter_one
+                        }
+                        _ => {
+                            let mut inter_filter = ::venndb::__internal::BitVec::repeat(false, self.db.rows.len());
+                            for value in &self.#name {
+                                #value_filter_multi
+                            }
+                            filter &= inter_filter;
+                        }
                     }
                 })
             }

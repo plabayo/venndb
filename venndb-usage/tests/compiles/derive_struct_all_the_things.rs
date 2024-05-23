@@ -61,6 +61,7 @@ fn main() {
     query
         .is_manager(true)
         .is_admin(true)
-        .department(Department::Engineering);
+        .department(Department::Engineering)
+        .department(Department::Sales);
     assert!(query.execute().is_none());
 }

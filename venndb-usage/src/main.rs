@@ -1351,3 +1351,88 @@ mod tests_v0_4 {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_v0_5 {
+    use super::*;
+
+    #[test]
+    fn test_employee_db_multi_filter_map_value() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::HR,
+            },
+            Employee {
+                id: 3,
+                name: "Charlie".to_string(),
+                is_manager: true,
+                is_admin: true,
+                is_active: true,
+                department: Department::Sales,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Engineering);
+        query.department(Department::HR);
+
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 2);
+    }
+
+    #[test]
+    fn test_employee_db_multi_filter_map_value_with_any() {
+        let db = EmployeeDB::from_rows(vec![
+            Employee {
+                id: 1,
+                name: "Alice".to_string(),
+                is_manager: true,
+                is_admin: false,
+                is_active: true,
+                department: Department::Engineering,
+            },
+            Employee {
+                id: 2,
+                name: "Bob".to_string(),
+                is_manager: false,
+                is_admin: false,
+                is_active: true,
+                department: Department::HR,
+            },
+            Employee {
+                id: 3,
+                name: "Charlie".to_string(),
+                is_manager: true,
+                is_admin: true,
+                is_active: true,
+                department: Department::Any,
+            },
+        ])
+        .unwrap();
+
+        let mut query = db.query();
+        query.department(Department::Engineering);
+        query.department(Department::Any);
+
+        let results = query.execute().unwrap().iter().collect::<Vec<_>>();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, 1);
+        assert_eq!(results[1].id, 3);
+    }
+}
