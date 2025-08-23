@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# 0.6.0 (2025-08-23)
+
+Breaking Changes:
+
+* Bump MSRV to 1.88 and rust edition 2024;
+
+Other Changes:
+
+* Replace `bitvec` crate dep with internal custom impl;
+  * `bitvec` was no longer maintained and starting
+    to cause issues on nightly;
+
 # 0.5.0 (2024-05-23)
 
 New Features:
