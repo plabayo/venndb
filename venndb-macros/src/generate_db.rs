@@ -408,7 +408,7 @@ fn generate_db_struct_method_append(
 
                 let filter_any_backfill = match field.filter_any_name() {
                     Some(name) => quote! {
-                        let bv = bv | &self.#name;
+                        let bv = &bv | &self.#name;
                     },
                     None => quote! {},
                 };
@@ -829,7 +829,7 @@ fn generate_query_struct_impl(
                             for value in &self.#name {
                                 #value_filter_multi
                             }
-                            filter &= inter_filter;
+                            filter &= &inter_filter;
                         }
                     }
                 })
@@ -986,7 +986,7 @@ fn generate_query_struct_impl(
 
         #vis enum #name_query_result_iter_kind<'a> {
             /// An iterator found over the one-bits in the resulting (non-filtered) bit-vector.
-            Bits(::venndb::__internal::IterOnes<'a, usize, ::venndb::__internal::Lsb0>),
+            Bits(::venndb::__internal::IterOnes<'a>),
             /// An iterator over the indices of the filtered results.
             Indices(::std::slice::Iter<'a, usize>),
         }

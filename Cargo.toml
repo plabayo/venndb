@@ -20,7 +20,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 members = [".", "fuzz", "venndb-macros", "venndb-usage"]
 
 [workspace.dependencies]
-bitvec = "1.0.1"
 divan = "0.1.21"
 hashbrown = "0.15.5"
 itertools = "0.14.0"
@@ -88,7 +87,6 @@ trivially_copy_pass_by_ref = "warn"
 use_self = "warn"
 
 [dependencies]
-bitvec = { workspace = true }
 hashbrown = { workspace = true }
 rand = { workspace = true }
 venndb-macros = { workspace = true }
