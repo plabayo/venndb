@@ -61,3 +61,7 @@ update-deps:
     cargo upgrade
     cargo upgrades
     cargo update
+
+publish:
+    cargo publish -p venndb-macros
+    cargo publish -p venndb
