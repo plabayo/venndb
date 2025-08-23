@@ -78,18 +78,6 @@ jobs:
       - name: Run tests
         run: cargo test --all-features --workspace
 
-  test-beta:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_BETA}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
   test:
     needs: [check, check-msrv]
     runs-on: ubuntu-latest
@@ -114,18 +102,6 @@ jobs:
       - name: Run tests
         run: cargo test --all-features --workspace
 
-  test-windows-beta:
-    needs: [check, check-msrv]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_BETA}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
   test-windows:
     needs: [check, check-msrv]
     runs-on: windows-latest
@@ -139,18 +115,6 @@ jobs:
         run: cargo test --all-features --workspace
 
   test-macos-msrv:
-    needs: [check, check-msrv]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
-  test-macos-beta:
     needs: [check, check-msrv]
     runs-on: macos-latest
     steps:
