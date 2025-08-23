@@ -7,7 +7,7 @@ name = "venndb-macros"
 readme = "README.md"
 repository = { workspace = true }
 keywords = ["database", "db", "memory", "bits"]
-categories = ["database", "db"]
+categories = ["database"]
 authors = { workspace = true }
 version = { workspace = true }
 rust-version = { workspace = true }
