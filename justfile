@@ -1,3 +1,9 @@
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+
+export RUSTFLAGS := "-D warnings"
+export RUSTDOCFLAGS := "-D rustdoc::broken-intra-doc-links"
+export RUST_LOG := "debug"
+
 fmt:
 	cargo fmt --all
 
@@ -19,10 +25,10 @@ typos:
 	typos -w
 
 doc:
-	RUSTDOCFLAGS="-D rustdoc::broken-intra-doc-links" cargo doc --all-features --no-deps
+	cargo doc --all-features --no-deps
 
 doc-open:
-	RUSTDOCFLAGS="-D rustdoc::broken-intra-doc-links" cargo doc --all-features --no-deps --open
+	cargo doc --all-features --no-deps --open
 
 hack:
 	cargo hack check --each-feature --no-dev-deps --workspace
@@ -46,3 +52,12 @@ fuzz-30s:
 
 bench:
 	cargo bench
+
+detect-unused-deps:
+	@cargo install cargo-machete
+	cargo machete --skip-target-dir
+
+update-deps:
+    cargo upgrade
+    cargo upgrades
+    cargo update

@@ -9,7 +9,7 @@ use errors::Errors;
 use field::StructField;
 use parse_attrs::{FieldAttrs, TypeAttrs};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 
 /// Derive macro generating VennDB functionality for this struct.
 ///
@@ -20,8 +20,8 @@ use quote::{format_ident, quote, ToTokens};
 #[proc_macro_derive(VennDB, attributes(venndb))]
 pub fn venndb(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
-    let gen: TokenStream = impl_from_args(&ast);
-    gen.into()
+    let ts: TokenStream = impl_from_args(&ast);
+    ts.into()
 }
 
 /// Transform the input into a token stream containing any generated implementations,

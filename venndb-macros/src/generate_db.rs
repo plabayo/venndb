@@ -1,6 +1,6 @@
 use crate::field::{FieldInfo, StructField};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, Path};
 
 /// Generate the venndb logic
@@ -923,11 +923,11 @@ fn generate_query_struct_impl(
             #vis fn any(&self) -> &'a #name {
                 let index = match &self.references {
                     #name_query_result_kind::Bits(v) => {
-                        let n = ::venndb::__internal::rand_usize() % v.count_ones();
+                        let n = ::venndb::__internal::rand_range(v.count_ones());
                         v.iter_ones().nth(n).unwrap()
                     }
                     #name_query_result_kind::Indices(i) => {
-                        let n = ::venndb::__internal::rand_usize() % i.len();
+                        let n = ::venndb::__internal::rand_range(i.len());
                         i[n]
                     }
                 };

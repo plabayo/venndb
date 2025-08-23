@@ -69,12 +69,12 @@ pub mod __internal {
 
     pub use bitvec::{order::Lsb0, slice::IterOnes, vec::BitVec};
     pub use hashbrown::HashMap;
+    use rand::Rng;
 
+    #[must_use]
     /// Generate a random `usize`.
-    pub fn rand_usize() -> usize {
-        use rand::Rng;
-
-        rand::thread_rng().gen()
+    pub fn rand_range(limit: usize) -> usize {
+        rand::rng().random_range(0..limit)
     }
 
     pub mod hash_map {

@@ -1,34 +1,105 @@
-[workspace]
-members = [".", "fuzz", "venndb-macros", "venndb-usage"]
 
 [package]
 description = "an in-memory database in Rust for rows queried using bit (flag) columns"
-edition = "2021"
-homepage = "https://github.com/plabayo/venndb"
-license = "MIT OR Apache-2.0"
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
 name = "venndb"
 readme = "README.md"
-repository = "https://github.com/plabayo/venndb"
+repository = { workspace = true }
 keywords = ["database", "db", "memory", "bits"]
 categories = ["database"]
 authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
-version = "0.5.0"
-rust-version = "1.75.0"
+version = { workspace = true }
+rust-version = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+[workspace]
+members = [".", "fuzz", "venndb-macros", "venndb-usage"]
+
+[workspace.dependencies]
+bitvec = "1.0.1"
+divan = "0.1.21"
+hashbrown = "0.15.5"
+itertools = "0.14.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+rand = "0.9.2"
+sqlite = "0.37.0"
+syn = "2.0"
+trybuild = "1"
+venndb = { version = "0.6.0", path = "." }
+venndb-macros = { version = "0.6.0", path = "venndb-macros" }
+
+[workspace.package]
+edition = "2024"
+homepage = "https://venndb.rs"
+repository = "https://github.com/plabayo/venndb"
+rust-version = "1.88.0"
+version = "0.6.0"
+authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
+license = "MIT OR Apache-2.0"
+
+[workspace.lints.rust]
+unreachable_pub = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+todo = "warn"
+empty_enum = "warn"
+enum_glob_use = "warn"
+equatable_if_let = "warn"
+mem_forget = "warn"
+unused_self = "warn"
+filter_map_next = "warn"
+needless_continue = "warn"
+needless_borrow = "warn"
+match_wildcard_for_single_variants = "warn"
+if_let_mutex = "warn"
+implicit_clone = "warn"
+await_holding_lock = "warn"
+imprecise_flops = "warn"
+suboptimal_flops = "warn"
+lossy_float_literal = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+fn_params_excessive_bools = "warn"
+exit = "warn"
+inefficient_to_string = "warn"
+linkedlist = "warn"
+macro_use_imports = "warn"
+manual_let_else = "warn"
+match_same_arms = "warn"
+must_use_candidate = "warn"
+needless_pass_by_ref_mut = "warn"
+needless_pass_by_value = "warn"
+option_option = "warn"
+redundant_clone = "warn"
+ref_option = "warn"
+verbose_file_reads = "warn"
+unnested_or_patterns = "warn"
+str_to_string = "warn"
+type_complexity = "allow"
+return_self_not_must_use = "warn"
+single_match_else = "warn"
+trivially_copy_pass_by_ref = "warn"
+use_self = "warn"
 
 [dependencies]
-bitvec = "1.0.1"
-hashbrown = "0.14.3"
-rand = "0.8.5"
-venndb-macros = { version = "0.5.0", path = "venndb-macros" }
+bitvec = { workspace = true }
+hashbrown = { workspace = true }
+rand = { workspace = true }
+venndb-macros = { workspace = true }
 
 [dev-dependencies]
-divan = "0.1.14"
-itertools = "0.13.0"
-sqlite = "0.36.0"
+divan = { workspace = true }
+itertools = { workspace = true }
+sqlite = { workspace = true }
+
+[lints]
+workspace = true
 
 [[bench]]
 name = "proxydb"

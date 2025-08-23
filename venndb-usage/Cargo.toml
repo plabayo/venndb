@@ -1,11 +1,12 @@
 [package]
 name = "venndb-usage"
-version = "0.1.0"
-edition = "2021"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+publish = false
 
 [dependencies]
-venndb = { path = ".." }
+venndb = { workspace = true }
 
 [dev-dependencies]
-trybuild = "1"
+trybuild = { workspace = true }

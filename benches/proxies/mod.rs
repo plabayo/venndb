@@ -2,37 +2,37 @@ use sqlite::Row;
 use std::{borrow::Cow, ops::Deref};
 use venndb::{Any, VennDB};
 
-pub trait ProxyDB: Sized {
+pub(super) trait ProxyDB: Sized {
     fn create(n: usize) -> Self;
 
-    fn get(&self, id: u64) -> Option<Cow<Proxy>>;
-    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>>;
-    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>>;
+    fn get(&self, id: u64) -> Option<Cow<'_, Proxy>>;
+    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>>;
+    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>>;
 }
 
 #[derive(Debug, Clone, VennDB)]
 #[venndb(name = "InMemProxyDB")]
-pub struct Proxy {
+pub(super) struct Proxy {
     #[venndb(key)]
-    pub id: u64,
-    pub address: String,
-    pub username: String,
-    pub password: String,
-    pub tcp: bool,
-    pub udp: bool,
-    pub http: bool,
-    pub socks5: bool,
-    pub datacenter: bool,
-    pub residential: bool,
-    pub mobile: bool,
+    pub(super) id: u64,
+    pub(super) address: String,
+    pub(super) username: String,
+    pub(super) password: String,
+    pub(super) tcp: bool,
+    pub(super) udp: bool,
+    pub(super) http: bool,
+    pub(super) socks5: bool,
+    pub(super) datacenter: bool,
+    pub(super) residential: bool,
+    pub(super) mobile: bool,
     #[venndb(filter)]
-    pub pool: Option<NormalizedString>,
+    pub(super) pool: Option<NormalizedString>,
     #[venndb(filter, any)]
-    pub country: NormalizedString,
+    pub(super) country: NormalizedString,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NormalizedString(String);
+pub(super) struct NormalizedString(String);
 
 impl<S: AsRef<str>> From<S> for NormalizedString {
     fn from(s: S) -> Self {
@@ -59,9 +59,9 @@ impl From<String> for Proxy {
         let mut parts = s.split(',');
         Self {
             id: parts.next().unwrap().parse().unwrap(),
-            address: parts.next().unwrap().to_string(),
-            username: parts.next().unwrap().to_string(),
-            password: parts.next().unwrap().to_string(),
+            address: parts.next().unwrap().to_owned(),
+            username: parts.next().unwrap().to_owned(),
+            password: parts.next().unwrap().to_owned(),
             tcp: parts.next().unwrap().parse().unwrap(),
             udp: parts.next().unwrap().parse().unwrap(),
             http: parts.next().unwrap().parse().unwrap(),
@@ -81,18 +81,18 @@ const RAW_PROXIES_CSV: &str = include_str!("fake_proxies.csv");
 
 impl ProxyDB for InMemProxyDB {
     fn create(n: usize) -> Self {
-        let mut db = InMemProxyDB::with_capacity(n);
+        let mut db = Self::with_capacity(n);
         for line in RAW_PROXIES_CSV.lines().take(n) {
-            db.append(Proxy::from(line.to_string())).unwrap();
+            db.append(Proxy::from(line.to_owned())).unwrap();
         }
         db
     }
 
-    fn get(&self, id: u64) -> Option<Cow<Proxy>> {
+    fn get(&self, id: u64) -> Option<Cow<'_, Proxy>> {
         self.get_by_id(&id).map(Cow::Borrowed)
     }
 
-    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
+    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>> {
         let mut query = self.query();
         query.tcp(true).pool(pool).country(country);
         query.execute().map(|result| {
@@ -101,7 +101,7 @@ impl ProxyDB for InMemProxyDB {
         })
     }
 
-    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
+    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>> {
         let mut query = self.query();
         query
             .socks5(true)
@@ -117,7 +117,7 @@ impl ProxyDB for InMemProxyDB {
 }
 
 #[derive(Debug)]
-pub struct NaiveProxyDB {
+pub(super) struct NaiveProxyDB {
     proxies: Vec<Proxy>,
 }
 
@@ -126,16 +126,16 @@ impl ProxyDB for NaiveProxyDB {
         let proxies = RAW_PROXIES_CSV
             .lines()
             .take(n)
-            .map(|line| Proxy::from(line.to_string()))
+            .map(|line| Proxy::from(line.to_owned()))
             .collect();
-        NaiveProxyDB { proxies }
+        Self { proxies }
     }
 
-    fn get(&self, id: u64) -> Option<Cow<Proxy>> {
+    fn get(&self, id: u64) -> Option<Cow<'_, Proxy>> {
         self.proxies.iter().find(|p| p.id == id).map(Cow::Borrowed)
     }
 
-    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
+    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>> {
         let found_proxies: Vec<_> = self
             .proxies
             .iter()
@@ -145,12 +145,12 @@ impl ProxyDB for NaiveProxyDB {
             None
         } else {
             use rand::Rng;
-            let index = rand::thread_rng().gen_range(0..found_proxies.len());
+            let index = rand::rng().random_range(0..found_proxies.len());
             Some(Cow::Borrowed(found_proxies[index]))
         }
     }
 
-    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
+    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>> {
         let found_proxies: Vec<_> = self
             .proxies
             .iter()
@@ -166,14 +166,14 @@ impl ProxyDB for NaiveProxyDB {
             None
         } else {
             use rand::Rng;
-            let index = rand::thread_rng().gen_range(0..found_proxies.len());
+            let index = rand::rng().random_range(0..found_proxies.len());
             Some(Cow::Borrowed(found_proxies[index]))
         }
     }
 }
 
 #[non_exhaustive]
-pub struct SqlLiteProxyDB {
+pub(super) struct SqlLiteProxyDB {
     conn: sqlite::Connection,
 }
 
@@ -209,7 +209,7 @@ impl ProxyDB for SqlLiteProxyDB {
 
         // insert the rows
         for line in RAW_PROXIES_CSV.lines().take(n) {
-            let proxy = Proxy::from(line.to_string());
+            let proxy = Proxy::from(line.to_owned());
             let statement = format!(
                 "INSERT INTO proxies (id, address, username, password, tcp, udp, http, socks5, datacenter, residential, mobile, pool, country)
                 VALUES ({}, '{}', '{}', '{}', {}, {}, {}, {}, {}, {}, {}, {}, '{}')",
@@ -230,10 +230,10 @@ impl ProxyDB for SqlLiteProxyDB {
             conn.execute(&statement).unwrap();
         }
 
-        SqlLiteProxyDB { conn }
+        Self { conn }
     }
 
-    fn get(&self, id: u64) -> Option<Cow<Proxy>> {
+    fn get(&self, id: u64) -> Option<Cow<'_, Proxy>> {
         let statement = format!("SELECT * FROM proxies WHERE id = {} LIMIT 1", id);
         let row = self
             .conn
@@ -242,14 +242,15 @@ impl ProxyDB for SqlLiteProxyDB {
             .into_iter()
             .next()?
             .ok()?;
-        let proxy = proxy_from_sql_row(row);
+        let proxy = proxy_from_sql_row(&row);
         Some(Cow::Owned(proxy))
     }
 
-    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
+    fn any_tcp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>> {
         let statement = format!(
             "SELECT * FROM proxies WHERE tcp = 1 AND pool = '{}' AND country = '{}' ORDER BY RANDOM() LIMIT 1",
-            NormalizedString::from(pool).0, NormalizedString::from(country).0
+            NormalizedString::from(pool).0,
+            NormalizedString::from(country).0
         );
         let row = self
             .conn
@@ -258,14 +259,15 @@ impl ProxyDB for SqlLiteProxyDB {
             .into_iter()
             .next()?
             .ok()?;
-        let proxy = proxy_from_sql_row(row);
+        let proxy = proxy_from_sql_row(&row);
         Some(Cow::Owned(proxy))
     }
 
-    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<Proxy>> {
+    fn any_socks5_isp(&self, pool: &str, country: &str) -> Option<Cow<'_, Proxy>> {
         let statement = format!(
             "SELECT * FROM proxies WHERE socks5 = 1 AND datacenter = 1 AND residential = 1 AND pool = '{}' AND country = '{}' ORDER BY RANDOM() LIMIT 1",
-            NormalizedString::from(pool).0, NormalizedString::from(country).0
+            NormalizedString::from(pool).0,
+            NormalizedString::from(country).0
         );
         let row = self
             .conn
@@ -274,12 +276,12 @@ impl ProxyDB for SqlLiteProxyDB {
             .into_iter()
             .next()?
             .ok()?;
-        let proxy = proxy_from_sql_row(row);
+        let proxy = proxy_from_sql_row(&row);
         Some(Cow::Owned(proxy))
     }
 }
 
-fn proxy_from_sql_row(row: Row) -> Proxy {
+fn proxy_from_sql_row(row: &Row) -> Proxy {
     Proxy {
         id: row.read::<i64, _>("id") as u64,
         address: row.read::<&str, _>("address").to_owned(),

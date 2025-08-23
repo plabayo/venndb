@@ -78,7 +78,7 @@ impl<'a> StructField<'a> {
     }
 
     /// Return the method name for this struct field.
-    pub fn info(&self) -> Option<FieldInfo> {
+    pub fn info(&self) -> Option<FieldInfo<'_>> {
         self.attrs.kind.as_ref().map(|kind| match kind {
             FieldKind::Key => FieldInfo::Key(KeyField {
                 name: self.name,

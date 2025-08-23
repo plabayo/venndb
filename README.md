@@ -35,7 +35,7 @@ Do let us know in case you use it as well in your project, such that we can asse
 [license-mit-url]: https://github.com/plabayo/venndb/blob/main/LICENSE-MIT
 [license-apache-badge]: https://img.shields.io/badge/license-APACHE-blue.svg
 [license-apache-url]: https://github.com/plabayo/venndb/blob/main/LICENSE-APACHE
-[rust-version-badge]: https://img.shields.io/badge/rustc-1.75+-blue?style=flat-square&logo=rust
+[rust-version-badge]: https://img.shields.io/badge/rustc-1.88+-blue?style=flat-square&logo=rust
 [rust-version-url]: https://www.rust-lang.org
 [actions-badge]: https://github.com/plabayo/venndb/workflows/CI/badge.svg
 [actions-url]: https://github.com/plabayo/venndb/actions
@@ -829,7 +829,7 @@ support as many as we reasonably can.
 
 ### Minimum supported Rust version
 
-venndb's MSRV is `1.75`.
+venndb's MSRV is `1.88`.
 
 [Using GitHub Actions we also test](https://github.com/plabayo/venndb/blob/main/.github/workflows/CI.yml) if `venndb` on that version still works on
 the stable and beta versions of _rust_ as well.
