@@ -165,27 +165,27 @@ fn test_db(db: &impl ProxyDB) {
 
 Performance for Database with `100` records:
 
-| Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
+| Proxy DB | Fastest | Slowest | Median |
 | --- | --- | --- | --- |
-| naive_proxy_db_100             | 6.50 | 8.00 | 18.04 |
-| sql_lite_proxy_db_100          | 32.58 | 37.37 | 302.00 |
-| venn_proxy_db_100              | 0.89 | 0.92 | 2.74 |
+| naive_proxy_db_100             | 1.276 µs      | 1.922 µs      | 1.328 µs |
+| sql_lite_proxy_db_100          | 22.96 µs      | 40.84 µs      | 26.52 µs |
+| venn_proxy_db_100              | 156.6 ns      | 243.8 ns      | 183.9 ns |
 
 Performance for Database with `12_500` records:
 
-| Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
+| Proxy DB | Fastest | Slowest | Median |
 | --- | --- | --- | --- |
-| naive_proxy_db_12_500          | 404.00 | 407.70 | 478.70 |
-| sql_lite_proxy_db_12_500       | 1061.00 | 1073.00 | 1727.00 |
-| venn_proxy_db_12_500           | 16.04 | 16.97 | 25.54 |
+| naive_proxy_db_12_500          | 202.7 µs      | 260 µs        | 217.1 µs      |
+| sql_lite_proxy_db_12_500       | 22 µs        | 903.4 µs      | 792.2 µs |
+| venn_proxy_db_12_500           | 1.767 µs      | 3.558 µs      | 2.1 µs  |
 
 Performance for Database with `100_000` records:
 
-| Proxy DB | Fastest (µs) | Median (µs) | Slowest (µs) |
+| Proxy DB | Fastest | Slowest | Median |
 | --- | --- | --- | --- |
-| naive_proxy_db_100_000         | 3790.00 | 3837.00 | 5731.00 |
-| sql_lite_proxy_db_100_000      | 8219.00 | 8298.00 | 9424.00 |
-| venn_proxy_db_100_000          | 124.20 | 129.20 | 156.30 |
+| naive_proxy_db_100_000         | 2.196 ms      | 2.563 ms      | 2.288 ms |
+| sql_lite_proxy_db_100_000      | 5.85 ms       | 6.634 ms      | 6.223 ms |
+| venn_proxy_db_100_000          | 13.01 µs      | 30.47 µs      | 17.85 µs |
 
 We are not database nor hardware experts though. Please do open an issue if you think
 these benchmarks are incorrect or if related improvements can be made.
@@ -197,27 +197,27 @@ See [the Contribution guidelines](#contribution) for more information.
 
 Allocations for Database with `100` records:
 
-| Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
+| Proxy DB | Fastest | Median | Slowest |
 | --- | --- | --- | --- |
-| naive_proxy_db_100             | 0.33 | 0.33 | 0.33 |
-| sql_lite_proxy_db_100          | 4.04 | 4.04 | 4.04 |
-| venn_proxy_db_100              | 0.05 | 0.05 | 0.05 |
+| naive_proxy_db_100             | 1.25 B      | 1.25 B        | 1.25 B |
+| sql_lite_proxy_db_100          | 1.378 KB    | 1.378 KB      | 1.378 KB |
+| venn_proxy_db_100              | 430 B       | 430 B         | 430 B |
 
 Allocations for Database with `12_500` records:
 
-| Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
+| Proxy DB | Fastest | Median | Slowest |
 | --- | --- | --- | --- |
-| naive_proxy_db_12_500          | 40.73 | 40.73 | 40.73 |
-| sql_lite_proxy_db_12_500       | 5.03 | 5.02 | 5.03 |
-| venn_proxy_db_12_500           | 3.15 | 3.15 | 3.15 |
+| naive_proxy_db_12_500          | 40.73 KB    | 40.73 KB      | 40.73 KB |
+| sql_lite_proxy_db_12_500       | 5.149 KB    | 5.141 KB      | 5.144 KB |
+| venn_proxy_db_12_500           | 3.534 KB    | 3.534 KB      | 3.534 KB |
 
 Allocations for Database with `100_000` records:
 
-| Proxy DB | Fastest (KB) | Median (KB) | Slowest (KB) |
+| Proxy DB | Fastest | Median | Slowest |
 | --- | --- | --- | --- |
-| naive_proxy_db_100_000         | 323.30 | 323.30 | 323.70 |
-| sql_lite_proxy_db_100_000      | 5.02 | 5.02 | 5.01 |
-| venn_proxy_db_100_000          | 25.02 | 25.02 | 25.02 |
+| naive_proxy_db_100_000         | 323.3 KB    | 323.3 KB      | 323.3 KB |
+| sql_lite_proxy_db_100_000      | 5.141 KB    | 5.147 KB      | 5.143 KB |
+| venn_proxy_db_100_000          | 25.4 KB     | 25.4 KB       | 25.4 KB |
 
 We are not database nor hardware experts though. Please do open an issue if you think
 these benchmarks are incorrect or if related improvements can be made.
