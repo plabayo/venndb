@@ -66,18 +66,6 @@ jobs:
           RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links"
         run: cargo doc --all-features --no-deps --workspace
 
-  test-msrv:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
   test:
     needs: [check, check-msrv]
     runs-on: ubuntu-latest
@@ -90,18 +78,6 @@ jobs:
       - name: Run tests
         run: cargo test --all-features --workspace
 
-  test-windows-msrv:
-    needs: [check, check-msrv]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
   test-windows:
     needs: [check, check-msrv]
     runs-on: windows-latest
@@ -110,18 +86,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
-  test-macos-msrv:
-    needs: [check, check-msrv]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --all-features --workspace
