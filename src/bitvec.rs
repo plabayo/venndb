@@ -54,7 +54,7 @@ impl BitVec {
 
     pub fn push(&mut self, value: bool) {
         debug_assert_eq!(self.data.len(), blocks_required(self.len));
-        if self.len % BITS_PER_BLOCK == 0 {
+        if self.len.is_multiple_of(BITS_PER_BLOCK) {
             self.data.push(0);
         }
         let i = self.len;
@@ -244,7 +244,7 @@ const BITS_PER_BLOCK: usize = BYTES_PER_BLOCK * 8;
 /// to store those bits.
 const fn blocks_required(num_bits: usize) -> usize {
     let n = num_bits / BITS_PER_BLOCK;
-    if num_bits % BITS_PER_BLOCK != 0 {
+    if !num_bits.is_multiple_of(BITS_PER_BLOCK) {
         n + 1
     } else {
         n

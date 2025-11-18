@@ -1,117 +1,168 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>venndb</title>
 
-    <title>venndb</title>
+        <link
+            rel="icon"
+            href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%2210 0 100 100%22><text y=%22.90em%22 font-size=%2290%22>❍</text></svg>"
+        />
 
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%2210 0 100 100%22><text y=%22.90em%22 font-size=%2290%22>❍</text></svg>">
+        <meta
+            name="description"
+            content="an in-memory database in Rust for rows queried using bit (flag) columns"
+        />
+        <meta name="robots" content="index,follow" />
+        <link rel="canonical" href="https://venndb.plabayo.tech/" />
 
-    <meta name="description" content="an in-memory database in Rust for rows queried using bit (flag) columns">
-    <meta name="robots" content="index,follow">
-    <link rel="canonical" href="https://venndb.rs/">
+        <meta property="og:title" content="venndb.plabayo.tech" />
+        <meta property="og:locale" content="en_US" />
+        <meta property="og:type" content="website" />
+        <meta
+            property="og:description"
+            content="an in-memory database in Rust for rows queried using bit (flag) columns"
+        />
+        <meta property="og:url" content="https://venndb.plabayo.tech" />
+        <meta property="og:site_name" content="venndb.plabayo.tech" />
+        <meta
+            property="og:image"
+            content="https://venndb.plabayo.tech/venndb_social_media.jpeg"
+        />
 
-    <meta property="og:title" content="venndb.rs" />
-    <meta property="og:locale" content="en_US" />
-    <meta property="og:type" content="website">
-    <meta property="og:description" content="an in-memory database in Rust for rows queried using bit (flag) columns" />
-    <meta property="og:url" content="https://venndb.rs" />
-    <meta property="og:site_name" content="venndb.rs" />
-    <meta property="og:image" content="https://venndb.rs/venndb_social_media.jpeg">
+        <link rel="stylesheet" type="text/css" href="style.css" />
 
-    <link rel="stylesheet" type="text/css" href="style.css">
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const copyButtons = document.querySelectorAll('.copy-button');
-            copyButtons.forEach(function (copyButton) {
-                copyButton.addEventListener('click', function () {
-                    const span = copyButton.querySelector('span');
-                    const text = span.textContent;
-                    navigator.clipboard.writeText(text).then(function () {
-                        span.textContent = 'Copied!';
-                        setTimeout(function () {
-                            span.textContent = text;
-                        }, 1000);
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const copyButtons = document.querySelectorAll(".copy-button");
+                copyButtons.forEach(function (copyButton) {
+                    copyButton.addEventListener("click", function () {
+                        const span = copyButton.querySelector("span");
+                        const text = span.textContent;
+                        navigator.clipboard.writeText(text).then(function () {
+                            span.textContent = "Copied!";
+                            setTimeout(function () {
+                                span.textContent = text;
+                            }, 1000);
+                        });
                     });
                 });
             });
-        });
-    </script>
-</head>
+        </script>
+    </head>
 
-<body>
-    <main>
-        <div>
-            <img src="banner.svg" alt="venndb banner" />
-            <div id="about">
-                <p>
-                    An <strong>append-only</strong> in-memory database in Rust for rows queried using bit (flag) columns.
-                    This database is designed for a very specific use case where you have mostly static data that you
-                    typically load at startup and have to query constantly using very simple filters. Datasets
-                    like these can be large and should be both fast and compact.
-                </p>
-                
-                <p>
-                    For the limited usecases where venndb can be applied to, it has less dependencies and is faster then traditional choices,
-                    such as a naive implementation or a more heavy lifted dependency such as <em>Sqlite</em>.
-                </p>
-
-                <quote>
-                    See <a href="https://github.com/plabayo/venndb#benchmarks">the benchmarks</a> for more information on this topic.
-                </quote>
-
-                <p>
-                    This project was developed originally in function of <a href="https://ramaproxy.org/">rama</a>, where you can see it being used for example to provide an in-memory (upstream) proxy database.
-                    Do <a href="mailto:glen@plabayo.tech">let us know</a> in case you use it as well in your project, such that we can assemble a showcase list.
-                </p>
-            </div>
-            <button class="copy-button" title="Copy command to clipboard" type="button">
-                <span>cargo add venndb</span>
-                <svg width="24" height="25" viewBox="0 0 24 25" fill="currentColor" xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true" class="_copy-icon_1nmwg6">
-                    <path
-                        d="M18 20h2v3c0 1-1 2-2 2H2c-.998 0-2-1-2-2V5c0-.911.755-1.667 1.667-1.667h5A3.323 3.323 0 0110 0a3.323 3.323 0 013.333 3.333h5C19.245 3.333 20 4.09 20 5v8.333h-2V9H2v14h16v-3zM3 7h14c0-.911-.793-1.667-1.75-1.667H13.5c-.957 0-1.75-.755-1.75-1.666C11.75 2.755 10.957 2 10 2s-1.75.755-1.75 1.667c0 .911-.793 1.666-1.75 1.666H4.75C3.793 5.333 3 6.09 3 7z">
-                    </path>
-                    <path d="M4 19h6v2H4zM12 11H4v2h8zM4 17h4v-2H4zM15 15v-3l-4.5 4.5L15 21v-3l8.027-.032L23 15z">
-                    </path>
-                </svg>
-            </button>
-            <div id="menu">
-                <ul>
-                    <li>
-                        <a href="https://crates.io/crates/venndb">
-                            <img alt="Crates.io Version" src="https://img.shields.io/crates/v/venndb">
-                        </a>
-                    </li>
-                    <li>
-                        <img alt="Crates.io MSRV" src="https://img.shields.io/crates/msrv/venndb">
-                    </li>
-                    <li>
-                        <a href="https://github.com/plabayo/venndb">
-                            <img alt="Crates.io License" src="https://img.shields.io/crates/l/venndb">
-                        </a>
-                    </li>
-                    <li>
-                        <a href="https://docs.rs/venndb">
-                            <img alt="docs.rs" src="https://img.shields.io/docsrs/venndb">
-                        </a>
-                    </li>
-                    <li>
-                        <a href="https://github.com/plabayo/venndb">
-                            <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/plabayo/venndb">
-                        </a>
-                    </li>
-                </ul>
-            </div>
+    <body>
+        <main>
             <div>
-                <h2>Example</h2>
-                <br>
-                <div id="code-block">
-                <pre><code>use venndb::VennDB
+                <img src="banner.svg" alt="venndb banner" />
+                <div id="about">
+                    <p>
+                        An <strong>append-only</strong> in-memory database in
+                        Rust for rows queried using bit (flag) columns. This
+                        database is designed for a very specific use case where
+                        you have mostly static data that you typically load at
+                        startup and have to query constantly using very simple
+                        filters. Datasets like these can be large and should be
+                        both fast and compact.
+                    </p>
+
+                    <p>
+                        For the limited usecases where venndb can be applied to,
+                        it has less dependencies and is faster then traditional
+                        choices, such as a naive implementation or a more heavy
+                        lifted dependency such as <em>Sqlite</em>.
+                    </p>
+
+                    <quote>
+                        See
+                        <a href="https://github.com/plabayo/venndb#benchmarks"
+                            >the benchmarks</a
+                        >
+                        for more information on this topic.
+                    </quote>
+
+                    <p>
+                        This project was developed originally in function of
+                        <a href="https://ramaproxy.org/">rama</a>, where you can
+                        see it being used for example to provide an in-memory
+                        (upstream) proxy database. Do
+                        <a href="mailto:glen@plabayo.tech">let us know</a> in
+                        case you use it as well in your project, such that we
+                        can assemble a showcase list.
+                    </p>
+                </div>
+                <button
+                    class="copy-button"
+                    title="Copy command to clipboard"
+                    type="button"
+                >
+                    <span>cargo add venndb</span>
+                    <svg
+                        width="24"
+                        height="25"
+                        viewBox="0 0 24 25"
+                        fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                        class="_copy-icon_1nmwg6"
+                    >
+                        <path
+                            d="M18 20h2v3c0 1-1 2-2 2H2c-.998 0-2-1-2-2V5c0-.911.755-1.667 1.667-1.667h5A3.323 3.323 0 0110 0a3.323 3.323 0 013.333 3.333h5C19.245 3.333 20 4.09 20 5v8.333h-2V9H2v14h16v-3zM3 7h14c0-.911-.793-1.667-1.75-1.667H13.5c-.957 0-1.75-.755-1.75-1.666C11.75 2.755 10.957 2 10 2s-1.75.755-1.75 1.667c0 .911-.793 1.666-1.75 1.666H4.75C3.793 5.333 3 6.09 3 7z"
+                        ></path>
+                        <path
+                            d="M4 19h6v2H4zM12 11H4v2h8zM4 17h4v-2H4zM15 15v-3l-4.5 4.5L15 21v-3l8.027-.032L23 15z"
+                        ></path>
+                    </svg>
+                </button>
+                <div id="menu">
+                    <ul>
+                        <li>
+                            <a href="https://crates.io/crates/venndb">
+                                <img
+                                    alt="Crates.io Version"
+                                    src="https://img.shields.io/crates/v/venndb"
+                                />
+                            </a>
+                        </li>
+                        <li>
+                            <img
+                                alt="Crates.io MSRV"
+                                src="https://img.shields.io/crates/msrv/venndb"
+                            />
+                        </li>
+                        <li>
+                            <a href="https://github.com/plabayo/venndb">
+                                <img
+                                    alt="Crates.io License"
+                                    src="https://img.shields.io/crates/l/venndb"
+                                />
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://docs.rs/venndb">
+                                <img
+                                    alt="docs.rs"
+                                    src="https://img.shields.io/docsrs/venndb"
+                                />
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://github.com/plabayo/venndb">
+                                <img
+                                    alt="GitHub Repo stars"
+                                    src="https://img.shields.io/github/stars/plabayo/venndb"
+                                />
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Example</h2>
+                    <br />
+                    <div id="code-block">
+                        <pre><code>use venndb::VennDB
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -143,13 +194,17 @@ fn main() {
     println!("non-manager admin engineer: {:?}", employee);
 }
                 </code></pre>
+                    </div>
+                    <quote>
+                        <p>
+                            Learn more at
+                            <a href="https://github.com/plabayo/venndb"
+                                >https://github.com/plabayo/venndb</a
+                            >.
+                        </p></quote
+                    >
                 </div>
-                <quote>
-                    <p>Learn more at <a href="https://github.com/plabayo/venndb">https://github.com/plabayo/venndb</a>.
-                </quote>
             </div>
-        </div>
-    </main>
-</body>
-
+        </main>
+    </body>
 </html>

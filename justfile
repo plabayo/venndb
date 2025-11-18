@@ -58,7 +58,6 @@ detect-unused-deps:
 	cargo machete --skip-target-dir
 
 update-deps:
-    cargo upgrade
     cargo upgrades
     cargo update
 
