@@ -11,7 +11,7 @@ mod rowset;
 mod runtime;
 
 pub use column::{BoolColumn, KeyIndex, ValueColumn};
-pub use plan::{Filter, Matches, MatchesIter, Plan};
+pub use plan::{Filter, Matches, MatchesIter, Plan, RowSets};
 pub use rowset::{Iter as RowSetIter, RowSet};
 pub use runtime::RuntimeColumn;
 

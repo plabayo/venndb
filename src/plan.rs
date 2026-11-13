@@ -11,6 +11,48 @@ const DRIVE_RATIO: usize = 256;
 /// The number of random rows tried before filtering all of them.
 const RANDOM_TRIES: usize = 8;
 
+/// A few row sets, of which the first ones are kept without allocating.
+#[derive(Debug, Clone, Default)]
+pub struct RowSets<'a> {
+    first: [Option<&'a RowSet>; 3],
+    more: Vec<&'a RowSet>,
+}
+
+impl<'a> RowSets<'a> {
+    /// Create an empty list of sets.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            first: [None; 3],
+            more: Vec::new(),
+        }
+    }
+
+    /// Add a set, unless it is in the list already.
+    pub fn push(&mut self, set: &'a RowSet) {
+        if self.iter().any(|known| std::ptr::eq(known, set)) {
+            return;
+        }
+        match self.first.iter_mut().find(|slot| slot.is_none()) {
+            Some(slot) => *slot = Some(set),
+            None => self.more.push(set),
+        }
+    }
+
+    /// Iterate over the sets, in the order they were added.
+    pub fn iter(&self) -> impl Iterator<Item = &'a RowSet> + Clone + '_ {
+        self.first.iter().flatten().chain(&self.more).copied()
+    }
+}
+
+impl<'a> FromIterator<&'a RowSet> for RowSets<'a> {
+    fn from_iter<I: IntoIterator<Item = &'a RowSet>>(sets: I) -> Self {
+        let mut this = Self::new();
+        sets.into_iter().for_each(|set| this.push(set));
+        this
+    }
+}
+
 /// A single condition a row has to meet.
 #[derive(Debug, Clone)]
 pub enum Filter<'a> {
@@ -19,7 +61,7 @@ pub enum Filter<'a> {
     /// The row is not in the set.
     Not(&'a RowSet),
     /// The row is in at least one of the sets.
-    AnyOf(Vec<&'a RowSet>),
+    AnyOf(RowSets<'a>),
     /// The row is set, or not set, in the runtime column.
     Runtime(&'a RuntimeColumn, bool),
 }
@@ -42,7 +84,7 @@ impl Filter<'_> {
         };
         match self {
             Self::Is(set) => Some(cost(set)),
-            Self::AnyOf(sets) => Some(sets.iter().map(|set| cost(set)).sum()),
+            Self::AnyOf(sets) => Some(sets.iter().map(cost).sum()),
             Self::Not(_) | Self::Runtime(..) => None,
         }
     }
@@ -87,11 +129,9 @@ impl<'a> Plan<'a> {
     /// Adding `None` adds no rows, but the slot does become a filter.
     pub fn or(&mut self, slot: usize, set: Option<&'a RowSet>) {
         if !matches!(self.slots[slot], Some(Filter::AnyOf(_))) {
-            self.slots[slot] = Some(Filter::AnyOf(Vec::new()));
+            self.slots[slot] = Some(Filter::AnyOf(RowSets::new()));
         }
-        if let (Some(Filter::AnyOf(sets)), Some(set)) = (&mut self.slots[slot], set)
-            && !sets.iter().any(|known| std::ptr::eq(*known, set))
-        {
+        if let (Some(Filter::AnyOf(sets)), Some(set)) = (&mut self.slots[slot], set) {
             sets.push(set);
         }
     }
@@ -101,16 +141,22 @@ impl<'a> Plan<'a> {
         self.extra.push(filter);
     }
 
+    fn filters(&self) -> impl Iterator<Item = &Filter<'a>> + Clone {
+        self.slots.iter().flatten().chain(&self.extra)
+    }
+
     /// The rows that meet all filters, `None` if there are no such rows.
     #[must_use]
     pub fn execute(&self) -> Option<Matches<'a>> {
-        let rows = self.rows;
-        let filters: Vec<&Filter<'a>> = self.slots.iter().flatten().chain(&self.extra).collect();
-        if rows == 0 {
+        if self.rows == 0 {
             return None;
         }
         let mut driver: Option<(usize, usize)> = None;
-        for (at, filter) in filters.iter().enumerate() {
+        let mut only = None;
+        let mut count = 0;
+        for (at, filter) in self.filters().enumerate() {
+            count += 1;
+            only = Some(filter);
             if let Some(cost) = filter.walk_cost() {
                 if cost == 0 {
                     return None;
@@ -120,127 +166,134 @@ impl<'a> Plan<'a> {
                 }
             }
         }
-        match (filters.as_slice(), driver) {
-            ([], _) => Some(Matches(Repr2::All(rows))),
-            ([Filter::Is(set)], _) if set.span() <= rows => Some(Matches(Repr2::Set(set))),
-            (_, Some((cost, at))) if cost.saturating_mul(DRIVE_RATIO) <= rows => {
-                walk(rows, &filters, at)
+        match (count, only, driver) {
+            (0, ..) => Some(Matches(Repr2::All(self.rows))),
+            (1, Some(Filter::Is(set)), _) if set.span() <= self.rows => {
+                Some(Matches(Repr2::Set(set)))
             }
-            _ => combine(rows, &filters),
+            (_, _, Some((cost, at))) if cost.saturating_mul(DRIVE_RATIO) <= self.rows => {
+                self.walk(at)
+            }
+            _ => self.combine(),
         }
     }
-}
 
-/// Walk over the rows of one filter, keeping those that meet the others.
-fn walk<'a>(rows: usize, filters: &[&Filter<'_>], driver: usize) -> Option<Matches<'a>> {
-    let keep = |row: &usize| {
-        *row < rows
-            && filters
-                .iter()
-                .enumerate()
-                .all(|(at, filter)| at == driver || filter.contains(*row))
-    };
-    let mut found: Vec<u32> = Vec::new();
-    match filters[driver] {
-        Filter::Is(set) => found.extend(set.iter().filter(keep).map(|row| row as u32)),
-        Filter::AnyOf(sets) => {
-            for set in sets {
-                found.extend(set.iter().filter(keep).map(|row| row as u32));
+    /// Walk over the rows of one filter, keeping those that meet the others.
+    fn walk(&self, driver: usize) -> Option<Matches<'a>> {
+        let keep = |row: &usize| {
+            *row < self.rows
+                && self
+                    .filters()
+                    .enumerate()
+                    .all(|(at, filter)| at == driver || filter.contains(*row))
+        };
+        let mut found: Vec<u32> = Vec::new();
+        match self.filters().nth(driver) {
+            Some(Filter::Is(set)) => found.extend(set.iter().filter(keep).map(|row| row as u32)),
+            Some(Filter::AnyOf(sets)) => {
+                for set in sets.iter() {
+                    found.extend(set.iter().filter(keep).map(|row| row as u32));
+                }
+                if sets.iter().nth(1).is_some() {
+                    found.sort_unstable();
+                    found.dedup();
+                }
             }
-            if sets.len() > 1 {
-                found.sort_unstable();
-                found.dedup();
-            }
+            _ => unreachable!("not a filter to walk over"),
         }
-        Filter::Not(_) | Filter::Runtime(..) => unreachable!("not a filter to walk over"),
+        (!found.is_empty()).then_some(Matches(Repr2::Rows(found)))
     }
-    (!found.is_empty()).then_some(Matches(Repr2::Rows(found)))
-}
 
-/// Combine the filters as bitmasks of all rows.
-fn combine<'a>(rows: usize, filters: &[&Filter<'_>]) -> Option<Matches<'a>> {
-    let len = rows.div_ceil(WORD);
-    let start = filters.iter().position(
-        |filter| matches!(filter, Filter::Is(set) if matches!(set.repr(), Repr::Dense(..))),
-    );
-    let mut mask = match start.map(|at| filters[at]) {
-        Some(Filter::Is(set)) => match set.repr() {
-            Repr::Dense(words, _) => {
-                let mut mask: Vec<u64> = words.iter().copied().take(len).collect();
+    /// Combine the filters as bitmasks of all rows.
+    fn combine(&self) -> Option<Matches<'a>> {
+        let len = self.rows.div_ceil(WORD);
+        let start = self
+            .filters()
+            .enumerate()
+            .find_map(|(at, filter)| match filter {
+                Filter::Is(set) => match set.repr() {
+                    Repr::Dense(words, _) => Some((at, words)),
+                    Repr::Sparse(_) => None,
+                },
+                _ => None,
+            });
+        let mut mask = match start {
+            Some((_, words)) => {
+                let mut mask: Vec<u64> = Vec::with_capacity(len);
+                mask.extend(words.iter().take(len));
                 mask.resize(len, 0);
                 mask
             }
-            Repr::Sparse(_) => unreachable!("start is a dense set"),
-        },
-        _ => vec![u64::MAX; len],
-    };
-    let mut scratch = Vec::new();
-    for (at, filter) in filters.iter().enumerate() {
-        if Some(at) == start {
-            continue;
-        }
-        match filter {
-            Filter::Is(set) => match set.repr() {
-                Repr::Dense(words, _) => and(&mut mask, words.iter().copied()),
-                Repr::Sparse(found) => {
-                    scratch.clear();
-                    scratch.resize(len, 0);
-                    for row in found.iter().map(|row| *row as usize) {
-                        if let Some(word) = mask.get(row / WORD) {
-                            scratch[row / WORD] |= word & (1 << (row % WORD));
-                        }
-                    }
-                    std::mem::swap(&mut mask, &mut scratch);
-                }
-            },
-            Filter::Not(set) => match set.repr() {
-                Repr::Dense(words, _) => {
-                    for (word, other) in mask.iter_mut().zip(words) {
-                        *word &= !other;
-                    }
-                }
-                Repr::Sparse(found) => {
-                    for row in found.iter().map(|row| *row as usize) {
-                        if let Some(word) = mask.get_mut(row / WORD) {
-                            *word &= !(1 << (row % WORD));
-                        }
-                    }
-                }
-            },
-            Filter::AnyOf(sets) => {
-                scratch.clear();
-                scratch.resize(len, 0);
-                for set in sets {
-                    match set.repr() {
-                        Repr::Dense(words, _) => {
-                            for (word, other) in scratch.iter_mut().zip(words) {
-                                *word |= other;
+            None => vec![u64::MAX; len],
+        };
+        let mut scratch = Vec::new();
+        for (at, filter) in self.filters().enumerate() {
+            if start.is_some_and(|(start, _)| start == at) {
+                continue;
+            }
+            match filter {
+                Filter::Is(set) => match set.repr() {
+                    Repr::Dense(words, _) => and(&mut mask, words.iter().copied()),
+                    Repr::Sparse(found) => {
+                        scratch.clear();
+                        scratch.resize(len, 0);
+                        for row in found.iter().map(|row| *row as usize) {
+                            if let Some(word) = mask.get(row / WORD) {
+                                scratch[row / WORD] |= word & (1 << (row % WORD));
                             }
                         }
-                        Repr::Sparse(found) => {
-                            for row in found.iter().map(|row| *row as usize) {
-                                if let Some(word) = scratch.get_mut(row / WORD) {
-                                    *word |= 1 << (row % WORD);
+                        std::mem::swap(&mut mask, &mut scratch);
+                    }
+                },
+                Filter::Not(set) => match set.repr() {
+                    Repr::Dense(words, _) => {
+                        for (word, other) in mask.iter_mut().zip(words) {
+                            *word &= !other;
+                        }
+                    }
+                    Repr::Sparse(found) => {
+                        for row in found.iter().map(|row| *row as usize) {
+                            if let Some(word) = mask.get_mut(row / WORD) {
+                                *word &= !(1 << (row % WORD));
+                            }
+                        }
+                    }
+                },
+                Filter::AnyOf(sets) => {
+                    scratch.clear();
+                    scratch.resize(len, 0);
+                    for set in sets.iter() {
+                        match set.repr() {
+                            Repr::Dense(words, _) => {
+                                for (word, other) in scratch.iter_mut().zip(words) {
+                                    *word |= other;
+                                }
+                            }
+                            Repr::Sparse(found) => {
+                                for row in found.iter().map(|row| *row as usize) {
+                                    if let Some(word) = scratch.get_mut(row / WORD) {
+                                        *word |= 1 << (row % WORD);
+                                    }
                                 }
                             }
                         }
                     }
+                    and(&mut mask, scratch.iter().copied());
                 }
-                and(&mut mask, scratch.iter().copied());
-            }
-            Filter::Runtime(column, true) => and(&mut mask, column.words()),
-            Filter::Runtime(column, false) => {
-                for (word, other) in mask.iter_mut().zip(column.words()) {
-                    *word &= !other;
+                Filter::Runtime(column, true) => and(&mut mask, column.words()),
+                Filter::Runtime(column, false) => {
+                    for (word, other) in mask.iter_mut().zip(column.words()) {
+                        *word &= !other;
+                    }
                 }
             }
         }
+        if !self.rows.is_multiple_of(WORD) {
+            mask[len - 1] &= (1 << (self.rows % WORD)) - 1;
+        }
+        let ones: usize = mask.iter().map(|word| word.count_ones() as usize).sum();
+        (ones > 0).then_some(Matches(Repr2::Mask(mask, ones)))
     }
-    if !rows.is_multiple_of(WORD) {
-        mask[len - 1] &= (1 << (rows % WORD)) - 1;
-    }
-    let ones: usize = mask.iter().map(|word| word.count_ones() as usize).sum();
-    (ones > 0).then_some(Matches(Repr2::Mask(mask, ones)))
 }
 
 /// Keep the bits that are also set in the other words, which may be fewer.
@@ -396,7 +449,7 @@ mod tests {
         }
     }
 
-    fn naive(rows: usize, filters: &[&Filter<'_>]) -> Vec<usize> {
+    fn naive(rows: usize, filters: &[Filter<'_>]) -> Vec<usize> {
         (0..rows)
             .filter(|row| filters.iter().all(|filter| filter.contains(*row)))
             .collect()
@@ -450,18 +503,15 @@ mod tests {
                         }
                     })
                     .collect();
-                let filters: Vec<&Filter<'_>> = filters.iter().collect();
                 let expected = naive(rows, &filters);
-                assert_eq!(found(combine(rows, &filters)), expected, "{filters:?}");
+                let mut plan = Plan::new(rows, 0);
+                filters.iter().for_each(|filter| plan.and(filter.clone()));
+                assert_eq!(found(plan.combine()), expected, "{filters:?}");
                 for (at, filter) in filters.iter().enumerate() {
                     if filter.walk_cost().is_some() {
-                        assert_eq!(found(walk(rows, &filters, at)), expected, "{filters:?}");
+                        assert_eq!(found(plan.walk(at)), expected, "{filters:?}");
                     }
                 }
-                let mut plan = Plan::new(rows, 0);
-                filters
-                    .iter()
-                    .for_each(|filter| plan.and((*filter).clone()));
                 assert_eq!(found(plan.execute()), expected, "{filters:?}");
             }
         }
@@ -500,7 +550,7 @@ mod tests {
         assert_eq!(found(plan.execute()), [2, 3]);
         plan.or(0, Some(&a));
         plan.or(0, Some(&a));
-        assert!(matches!(&plan.slots[0], Some(Filter::AnyOf(sets)) if sets.len() == 1));
+        assert!(matches!(&plan.slots[0], Some(Filter::AnyOf(sets)) if sets.iter().count() == 1));
         plan.or(0, Some(&b));
         plan.or(0, None);
         assert_eq!(found(plan.execute()), [0, 1, 2]);

@@ -51,6 +51,10 @@ impl RuntimeColumn {
     /// # Panics
     ///
     /// Panics if the row is out of range.
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "the previous value is seldom of use"
+    )]
     pub fn set(&self, row: usize, value: bool) -> bool {
         assert!(row < self.len, "venndb: row {row} out of range");
         let bit = 1 << (row % WORD);
@@ -68,6 +72,7 @@ impl RuntimeColumn {
     /// # Panics
     ///
     /// Panics if the row is out of range.
+    #[must_use]
     pub fn claim(&self, row: usize) -> bool {
         !self.set(row, true)
     }

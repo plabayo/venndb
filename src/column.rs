@@ -171,14 +171,13 @@ impl<T: Hash + Eq> ValueColumn<T> {
     where
         T: Clone,
     {
-        let slot = match self.slots.get(value) {
-            Some(slot) => *slot as usize,
-            None => {
-                let slot = self.rows.len();
-                self.slots.insert(value.clone(), slot as u32);
-                self.rows.push(RowSet::new());
-                slot
-            }
+        let slot = if let Some(slot) = self.slots.get(value) {
+            *slot as usize
+        } else {
+            let slot = self.rows.len();
+            self.slots.insert(value.clone(), slot as u32);
+            self.rows.push(RowSet::new());
+            slot
         };
         self.rows[slot].insert(row);
     }
@@ -228,7 +227,7 @@ impl<T: Hash + Eq> ValueColumn<T> {
     ///
     /// The predicate is called once per distinct value, not once per row.
     pub fn filter_where<'a>(&'a self, plan: &mut Plan<'a>, mut predicate: impl FnMut(&T) -> bool) {
-        let mut sets: Vec<&RowSet> = self
+        let mut sets: crate::plan::RowSets<'a> = self
             .values()
             .filter(|(value, rows)| !rows.is_empty() && predicate(value))
             .map(|(_, rows)| rows)
