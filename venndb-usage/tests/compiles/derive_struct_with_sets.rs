@@ -9,7 +9,14 @@ fn code(employee: &Employee) -> String {
     employee.id.to_string()
 }
 
+impl Employee {
+    fn is_valid(&self) -> bool {
+        self.id > 0
+    }
+}
+
 #[derive(Debug, VennDB)]
+#[venndb(validator = <Employee>::is_valid)]
 struct Employee {
     #[venndb(key)]
     id: u32,
@@ -23,6 +30,8 @@ struct Employee {
     rooms: Box<[u16]>,
     #[venndb(filter, any = is_any)]
     level: u8,
+    #[venndb(filter, set)]
+    flags: &'static [bool],
 }
 
 fn main() {

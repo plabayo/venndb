@@ -161,7 +161,7 @@ fn main() {
     assert_eq!(ids(query.execute().unwrap().iter()), [4, 5]);
 
     // a fact about a row that is no field: computed once, used like a column
-    let private = fleet.column(|server| server.address.starts_with("10."));
+    let redundant = fleet.column(|server| server.endpoints.len() > 1);
     // state that changes while the fleet is in use: set from any thread, no lock
     let draining = fleet.runtime_column();
     draining.set(fleet.index_by_id(&4).unwrap(), true);
@@ -169,17 +169,20 @@ fn main() {
     let mut query = fleet.query();
     query
         .country("BE")
-        .and(Filter::Is(&private))
+        .and(Filter::Is(&redundant))
         .and(Filter::Runtime(&draining, false));
-    assert_eq!(ids(query.execute().unwrap().iter()), [1, 2, 5]);
+    assert_eq!(ids(query.execute().unwrap().iter()), [1, 5]);
 
     // server 4 is back, the same query now finds it
     draining.set(fleet.index_by_id(&4).unwrap(), false);
     let found = query.execute().unwrap();
-    assert_eq!(found.len(), 4);
+    assert_eq!(found.len(), 3);
 
     // a random server, and one for a condition that fits no column
     let lucky = found.any();
     let odd = found.any_where(|server| server.id % 2 == 1).unwrap();
-    println!("picked server {} and odd server {}", lucky.id, odd.id);
+    println!(
+        "picked server {} at {} and odd server {}",
+        lucky.id, lucky.address, odd.id
+    );
 }

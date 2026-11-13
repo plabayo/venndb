@@ -1,5 +1,5 @@
-error: Invalid field-level `venndb` attribute
-       Expected one of: `name`
+error: Invalid type-level `venndb` attribute
+       Expected one of: `name`, `validator`
  --> tests/fails/unknown_attr_struct.rs:4:10
   |
 4 | #[venndb(foo)]

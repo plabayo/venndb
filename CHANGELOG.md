@@ -16,6 +16,8 @@ Breaking Changes:
   `RowSet`, `KeyIndex`, `BoolColumn`, `ValueColumn`, `Plan`, `Filter`, `Matches` and `RuntimeColumn`;
 * `<DB>QueryResult::iter` returns `impl Iterator`, the `<DB>QueryResultIter` types are gone;
 * A database holds at most `u32::MAX` rows;
+* `<DB>Query` and `<DB>QueryResult` are generated for every database, also for one without filters,
+  and filters named `and` or `<filter>_where` clash with the new query methods of that name;
 * Querying a filter map on a value no row has, next to values that do have rows,
   now returns the rows of the latter instead of nothing.
 

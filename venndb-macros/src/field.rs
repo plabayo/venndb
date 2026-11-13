@@ -101,7 +101,7 @@ impl<'a> StructField<'a> {
                 &field.ty,
                 concat!(
                     "Invalid field-level `venndb` attribute\n",
-                    "`members` needs `item = Type` to know the type of the values",
+                    "`members` needs `item = \"Type\"` to know the type of the values",
                 ),
             );
             return None;

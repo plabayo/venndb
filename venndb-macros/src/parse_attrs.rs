@@ -71,6 +71,14 @@ impl<'a> FieldAttrs<'a> {
                                     "Cannot have both `key` and `any`",
                                 ),
                             );
+                        } else if key.is_some() {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Expected only one `key`",
+                                ),
+                            );
                         } else {
                             key = Some(path_value(errors, &meta));
                         }
@@ -93,6 +101,14 @@ impl<'a> FieldAttrs<'a> {
                                 concat!(
                                     "Invalid field-level `venndb` attribute\n",
                                     "Cannot have both `key` and `any`",
+                                ),
+                            );
+                        } else if any.is_some() {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Expected only one `any`",
                                 ),
                             );
                         } else {
@@ -246,24 +262,14 @@ fn path_value(errors: &Errors, meta: &syn::Meta) -> Option<syn::ExprPath> {
 }
 
 fn is_bool(ty: &syn::Type) -> bool {
-    if let syn::Type::Path(syn::TypePath { path, .. }) = ty {
-        path.is_ident("bool")
-    } else {
-        if ty.to_token_stream().to_string().contains("bool") {
-            panic!(
-                "Expected bool, found {:?}",
-                ty.to_token_stream().to_string()
-            );
-        }
-        false
-    }
+    matches!(ty, syn::Type::Path(syn::TypePath { path, .. }) if path.is_ident("bool"))
 }
 
 /// Represents a `#[derive(VennDB)]` type's top-level attributes.
 #[derive(Default)]
 pub struct TypeAttrs {
     pub name: Option<syn::LitStr>,
-    pub validator: Option<syn::Path>,
+    pub validator: Option<syn::ExprPath>,
 }
 
 impl TypeAttrs {
@@ -285,15 +291,14 @@ impl TypeAttrs {
                         this.name = errors.expect_lit_str(&m.value).cloned();
                     }
                 } else if name.is_ident("validator") {
-                    if let Some(m) = errors.expect_meta_name_value(&meta) {
-                        this.validator = errors.expect_path(&m.value).cloned();
-                    }
+                    errors.expect_meta_name_value(&meta);
+                    this.validator = path_value(errors, &meta);
                 } else {
                     errors.err(
                         &meta,
                         concat!(
-                            "Invalid field-level `venndb` attribute\n",
-                            "Expected one of: `name`",
+                            "Invalid type-level `venndb` attribute\n",
+                            "Expected one of: `name`, `validator`",
                         ),
                     );
                 }
@@ -328,11 +333,14 @@ fn is_venndb_attr(attr: &syn::Attribute) -> bool {
     is_matching_attr("venndb", attr)
 }
 
-/// Returns `Some(T)` if a type is `Wrapper<T>`, whatever the wrapper.
+/// Returns `Some(T)` if a type is `Set<T>`, whatever the set.
 pub fn ty_inner_any(ty: &syn::Type) -> Option<&syn::Type> {
     if let syn::Type::Path(path) = ty
         && path.qself.is_none()
-        && let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments
+        && let Some(last) = path.path.segments.last()
+        // a pointer to a set says nothing about the values of the set
+        && !["Box", "Rc", "Arc"].iter().any(|pointer| last.ident == pointer)
+        && let syn::PathArguments::AngleBracketed(args) = &last.arguments
         && let Some(syn::GenericArgument::Type(ty)) = args.args.first()
     {
         return Some(ty);

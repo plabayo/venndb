@@ -2,13 +2,13 @@ use crate::field::{FieldInfo, FilterMapField, StructField};
 use crate::parse_attrs::By;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{Ident, Path};
+use syn::{ExprPath, Ident};
 
 /// Generate the venndb logic
 pub fn generate_db(
     name: &Ident,
     name_db: &Ident,
-    validator: Option<&Path>,
+    validator: Option<&ExprPath>,
     vis: &syn::Visibility,
     fields: &[StructField],
 ) -> TokenStream {
@@ -95,7 +95,7 @@ fn generate_db_struct(
 fn generate_db_struct_methods(
     name: &Ident,
     name_db: &Ident,
-    validator: Option<&Path>,
+    validator: Option<&ExprPath>,
     vis: &syn::Visibility,
     db_error: &DbError,
     fields: &[FieldInfo],
@@ -289,7 +289,7 @@ fn generate_db_struct_method_from_rows(
 fn generate_db_struct_method_append(
     name: &Ident,
     name_db: &Ident,
-    validator: Option<&Path>,
+    validator: Option<&ExprPath>,
     vis: &syn::Visibility,
     db_error: &DbError,
     fields: &[FieldInfo],
@@ -778,7 +778,7 @@ impl ToTokens for DbErrorKind {
 }
 
 impl DbError {
-    fn new(validator: Option<&Path>, fields: &[FieldInfo]) -> Self {
+    fn new(validator: Option<&ExprPath>, fields: &[FieldInfo]) -> Self {
         let mut error_kinds = Vec::new();
 
         if validator.is_some() {

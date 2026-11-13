@@ -1702,6 +1702,72 @@ mod tests_v0_7 {
     }
 
     #[test]
+    fn test_failed_append_leaves_no_trace() {
+        let mut db = db();
+        let duplicate = engineer(2, "new", &[Skill::Design], "tokyo");
+        assert!(db.append(duplicate).is_err());
+        let rest = vec![
+            engineer(5, "new", &[Skill::Design], "tokyo"),
+            engineer(1, "new", &[Skill::Design], "tokyo"),
+            engineer(6, "new", &[Skill::Design], "tokyo"),
+        ];
+        assert!(db.extend(rest).is_err());
+        assert_eq!(db.len(), 5);
+
+        let mut query = db.query();
+        query.skills(Skill::Design);
+        assert_eq!(ids(query.execute()), [1, 3, 5]);
+        query.reset().office("tokyo");
+        assert_eq!(ids(query.execute()), [2, 5]);
+        query.reset().remote(false);
+        assert_eq!(ids(query.execute()), [1, 3, 5]);
+        query.reset().projects(50u16);
+        assert_eq!(ids(query.execute()), [5]);
+        query.reset().projects(7u16);
+        assert_eq!(ids(query.execute()), [1, 2, 3, 4, 5]);
+        assert_eq!(db.index_by_badge("new-5"), Some(4));
+        assert!(db.get_by_badge("new-6").is_none());
+    }
+
+    #[test]
+    fn test_with_capacity() {
+        let mut db = EngineerDB::with_capacity(8);
+        assert!(db.capacity() >= 8);
+        assert!(db.is_empty());
+        db.append(engineer(1, "core", &[], "ghent")).unwrap();
+        assert_eq!(db.len(), 1);
+        assert_eq!(db.get_by_id(&1).unwrap().team, "core");
+    }
+
+    #[test]
+    fn test_value_and_where_are_both_required() {
+        let db = db();
+        let mut query = db.query();
+        query
+            .skills(Skill::Design)
+            .skills_where(|skill| matches!(skill, Skill::Go { .. }));
+        assert_eq!(ids(query.execute()), [3]);
+        // a row without value matches no predicate, a wildcard row matches all
+        query.reset().desk_where(|_| true);
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        query.reset().desk_where(|_| false);
+        assert_eq!(ids(query.execute()), [1]);
+        query.reset().floors(2).floors(9);
+        assert_eq!(ids(query.execute()), [1, 3, 4]);
+    }
+
+    #[test]
+    fn test_any_where_is_random() {
+        let db = db();
+        let result = db.query().execute().unwrap();
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..200 {
+            seen.insert(result.any_where(|engineer| engineer.id != 2).unwrap().id);
+        }
+        assert!(seen.into_iter().eq([1, 3, 4]));
+    }
+
+    #[test]
     fn test_unknown_value_next_to_known() {
         let db = db();
         let mut query = db.query();
