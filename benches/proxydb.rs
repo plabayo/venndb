@@ -1,107 +1,157 @@
+//! Benchmarks of a proxy database shaped like the one of `rama`:
+//! 7 bool columns and 5 label columns, of which 3 with many values.
+//!
+//! Run with `just bench`, or `just bench-full` to include 1 000 000 rows.
+
 mod proxies;
-use divan::AllocProfiler;
-use proxies::{InMemProxyDB, NaiveProxyDB, ProxyDB, SqlLiteProxyDB};
-use std::sync::atomic::AtomicUsize;
+
+use divan::{AllocProfiler, Bencher};
+use proxies::{
+    NaiveProxyDB, PredicateProxyDB, Proxy, ProxyDB, Query, RoaringProxyDB, Scenario, SqliteProxyDB,
+    VennProxyDB,
+};
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 #[global_allocator]
 static ALLOC: AllocProfiler = AllocProfiler::system();
 
 fn main() {
-    // Run registered benchmarks.
+    verify();
     divan::main();
 }
 
-const POOLS: [&str; 14] = [
-    "poolA", "poolB", "poolC", "poolD", "poolE", "poolF", "poolG", "poolH", "poolI", "poolJ",
-    "poolA", "poolB", "poolC", "poolD",
+const SIZES: &[usize] = if cfg!(feature = "bench-full") {
+    &[1_000, 100_000, 1_000_000]
+} else {
+    &[1_000, 100_000]
+};
+
+const QUERIES: usize = 512;
+
+static DBS: Mutex<Option<HashMap<(TypeId, usize), Arc<dyn Any + Send + Sync>>>> = Mutex::new(None);
+static ROUND: AtomicUsize = AtomicUsize::new(0);
+
+/// The database of the given type and size, created once.
+fn db<D: ProxyDB>(n: usize) -> Arc<D> {
+    let mut dbs = DBS.lock().unwrap();
+    dbs.get_or_insert_default()
+        .entry((TypeId::of::<D>(), n))
+        .or_insert_with(|| Arc::new(D::create(proxies::rows(n))))
+        .clone()
+        .downcast()
+        .unwrap()
+}
+
+fn next(queries: &[Query]) -> &Query {
+    &queries[ROUND.fetch_add(1, Ordering::Relaxed) % queries.len()]
+}
+
+/// All implementations have to agree before they are compared.
+fn verify() {
+    let rows = proxies::rows(2_000);
+    let naive = NaiveProxyDB::create(rows.clone());
+    let venn = VennProxyDB::create(rows.clone());
+    let roaring = RoaringProxyDB::create(rows.clone());
+    let sqlite = SqliteProxyDB::create(rows.clone());
+    for scenario in SCENARIOS {
+        for query in proxies::queries(&rows, scenario, 64) {
+            let expected = naive.count(&query);
+            assert_eq!(expected, venn.count(&query), "venndb: {scenario:?}");
+            assert_eq!(expected, roaring.count(&query), "roaring: {scenario:?}");
+            assert_eq!(expected, sqlite.count(&query), "sqlite: {scenario:?}");
+        }
+    }
+}
+
+const SCENARIOS: [Scenario; 7] = [
+    Scenario::Bools,
+    Scenario::Country,
+    Scenario::PoolCountry,
+    Scenario::City,
+    Scenario::Asn,
+    Scenario::Countries,
+    Scenario::Cities,
 ];
-const COUNTRIES: [&str; 13] = [
-    "US", "CA", "GB", "DE", "FR", "IT", "ES", "AU", "JP", "CN", "FR", "IT", "ES",
-];
 
-#[allow(clippy::declare_interior_mutable_const)]
-const COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-fn next_round() -> usize {
-    #[allow(clippy::borrow_interior_mutable_const)]
-    COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+fn pick<D: ProxyDB>(bencher: Bencher, n: usize, scenario: Scenario) {
+    let db = db::<D>(n);
+    let queries = proxies::queries(&proxies::rows(n), scenario, QUERIES);
+    bencher.bench(|| db.pick(next(&queries)));
 }
 
-fn test_db(db: &impl ProxyDB) {
-    let i = next_round();
-
-    let pool = POOLS[i % POOLS.len()];
-    let country = COUNTRIES[i % COUNTRIES.len()];
-
-    let result = db.get(i as u64);
-    divan::black_box(result);
-
-    let result = db.any_tcp(pool, country);
-    divan::black_box(result);
-
-    let result = db.any_socks5_isp(pool, country);
-    divan::black_box(result);
+/// Keeps 9 out of 10 proxies, as a filter on blocked proxies would.
+fn predicate(proxy: &Proxy) -> bool {
+    (proxy.id.wrapping_mul(2_654_435_761) >> 16) % 10 != 3
 }
 
-#[divan::bench]
-fn venn_proxy_db_100(bencher: divan::Bencher) {
+fn pick_if<D: PredicateProxyDB>(bencher: Bencher, n: usize, scenario: Scenario) {
+    let db = db::<D>(n);
+    let queries = proxies::queries(&proxies::rows(n), scenario, QUERIES);
+    bencher.bench(|| db.pick_if(next(&queries), predicate));
+}
+
+/// Time and peak memory to create the database.
+#[divan::bench(
+    types = [VennProxyDB, NaiveProxyDB, RoaringProxyDB, SqliteProxyDB],
+    args = SIZES,
+    sample_count = 3,
+    sample_size = 1,
+)]
+fn build<D: ProxyDB>(bencher: Bencher, n: usize) {
     bencher
-        .with_inputs(|| InMemProxyDB::create(100))
-        .bench_refs(|db| test_db(db));
+        .with_inputs(|| proxies::rows(n))
+        .bench_values(D::create);
 }
 
-#[divan::bench]
-fn naive_proxy_db_100(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| NaiveProxyDB::create(100))
-        .bench_refs(|db| test_db(db));
+#[divan::bench(types = [VennProxyDB, NaiveProxyDB, RoaringProxyDB, SqliteProxyDB], args = SIZES)]
+fn get_by_id<D: ProxyDB>(bencher: Bencher, n: usize) {
+    let db = db::<D>(n);
+    bencher.bench(|| db.get((ROUND.fetch_add(1, Ordering::Relaxed) % n) as u64));
 }
 
-#[divan::bench]
-fn sql_lite_proxy_db_100(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| SqlLiteProxyDB::create(100))
-        .bench_refs(|db| test_db(db));
+macro_rules! scenarios {
+    ($($name:ident => $scenario:expr,)+) => {
+        mod pick {
+            use super::*;
+            $(
+                #[divan::bench(
+                    types = [VennProxyDB, NaiveProxyDB, RoaringProxyDB, SqliteProxyDB],
+                    args = SIZES,
+                )]
+                fn $name<D: ProxyDB>(bencher: Bencher, n: usize) {
+                    pick::<D>(bencher, n, $scenario);
+                }
+            )+
+        }
+
+        mod pick_if {
+            use super::*;
+            $(
+                #[divan::bench(
+                    types = [VennProxyDB, NaiveProxyDB, RoaringProxyDB],
+                    args = SIZES,
+                )]
+                fn $name<D: PredicateProxyDB>(bencher: Bencher, n: usize) {
+                    pick_if::<D>(bencher, n, $scenario);
+                }
+            )+
+        }
+    };
 }
 
-#[divan::bench]
-fn venn_proxy_db_12_500(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| InMemProxyDB::create(12_500))
-        .bench_refs(|db| test_db(db));
-}
-
-#[divan::bench]
-fn naive_proxy_db_12_500(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| NaiveProxyDB::create(12_500))
-        .bench_refs(|db| test_db(db));
-}
-
-#[divan::bench]
-fn sql_lite_proxy_db_12_500(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| SqlLiteProxyDB::create(12_500))
-        .bench_refs(|db| test_db(db));
-}
-
-#[divan::bench]
-fn venn_proxy_db_100_000(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| InMemProxyDB::create(100_000))
-        .bench_refs(|db| test_db(db));
-}
-
-#[divan::bench]
-fn naive_proxy_db_100_000(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| NaiveProxyDB::create(100_000))
-        .bench_refs(|db| test_db(db));
-}
-
-#[divan::bench]
-fn sql_lite_proxy_db_100_000(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(|| SqlLiteProxyDB::create(100_000))
-        .bench_refs(|db| test_db(db));
+scenarios! {
+    bools => Scenario::Bools,
+    country => Scenario::Country,
+    pool_country => Scenario::PoolCountry,
+    city => Scenario::City,
+    asn => Scenario::Asn,
+    countries => Scenario::Countries,
+    cities => Scenario::Cities,
 }

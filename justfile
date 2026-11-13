@@ -53,6 +53,9 @@ fuzz-30s:
 bench:
 	cargo bench
 
+bench-full:
+	cargo bench --features bench-full
+
 detect-unused-deps:
 	@cargo install cargo-machete
 	cargo machete --skip-target-dir
