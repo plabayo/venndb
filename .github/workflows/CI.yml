@@ -196,8 +196,9 @@ jobs:
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-fuzz
+      # the prebuilt cargo-fuzz would build for musl, which no sanitizer supports
       - name: cargo fuzz
-        run: cargo fuzz run fuzz_employee_db -- -max_len=4096 -max_total_time=60
+        run: cargo fuzz run --target x86_64-unknown-linux-gnu fuzz_employee_db -- -max_len=4096 -max_total_time=60
 
   semver-checks:
     needs: [check]
