@@ -255,6 +255,7 @@ impl<'a> Plan<'a> {
             None => vec![u64::MAX; len],
         };
         let mut scratch = Vec::new();
+        let mut hits: Vec<u32> = Vec::new();
         for (at, filter) in self.filters().enumerate() {
             if start.is_some_and(|(start, _)| start == at) {
                 continue;
@@ -288,25 +289,30 @@ impl<'a> Plan<'a> {
                     }
                 },
                 Filter::AnyOf(sets) => {
-                    scratch.clear();
-                    scratch.resize(len, 0);
+                    // the rows of the sparse sets that are still in, to put back
+                    // after keeping what is in at least one of the dense sets
+                    hits.clear();
                     for set in sets.iter() {
-                        match set.repr() {
-                            Repr::Dense(words, _) => {
-                                for (word, other) in scratch.iter_mut().zip(words) {
-                                    *word |= other;
-                                }
-                            }
-                            Repr::Sparse(found) => {
-                                for row in found.iter().map(|row| *row as usize) {
-                                    if let Some(word) = scratch.get_mut(row / WORD) {
-                                        *word |= 1 << (row % WORD);
-                                    }
-                                }
-                            }
+                        if let Repr::Sparse(found) = set.repr() {
+                            hits.extend(found.iter().filter(|row| {
+                                let row = **row as usize;
+                                mask.get(row / WORD)
+                                    .is_some_and(|word| word >> (row % WORD) & 1 == 1)
+                            }));
                         }
                     }
-                    and(&mut mask, scratch.iter().copied());
+                    for (at, word) in mask.iter_mut().enumerate() {
+                        let mut any = 0;
+                        for set in sets.iter() {
+                            if let Repr::Dense(words, _) = set.repr() {
+                                any |= words.get(at).copied().unwrap_or(0);
+                            }
+                        }
+                        *word &= any;
+                    }
+                    for row in hits.iter().map(|row| *row as usize) {
+                        mask[row / WORD] |= 1 << (row % WORD);
+                    }
                 }
                 Filter::Runtime(column, true) => and(&mut mask, column.words()),
                 Filter::Runtime(column, false) => {
@@ -546,6 +552,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_pointer_width = "64")]
     #[should_panic(expected = "at most u32::MAX rows")]
     fn rows_have_to_fit() {
         let _ = Plan::new(RowSet::MAX_ROWS + 1, 0);

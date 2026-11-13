@@ -226,6 +226,14 @@ fn generate_db_struct_method_new(
         #vis fn with_capacity(capacity: usize) -> Self {
             Self {
                 rows: ::std::vec::Vec::with_capacity(capacity),
+                ..Self::__venndb_with_key_capacity(capacity)
+            }
+        }
+
+        /// A database with room for the keys of the given number of rows.
+        #[doc(hidden)]
+        fn __venndb_with_key_capacity(capacity: usize) -> Self {
+            Self {
                 #(#keys: ::venndb::KeyIndex::with_capacity(capacity),)*
                 ..Self::default()
             }
@@ -265,7 +273,8 @@ fn generate_db_struct_method_from_rows(
     quote! {
         #[doc=#method_doc]
         #vis fn from_rows(rows: ::std::vec::Vec<#name>) -> #return_type {
-            let mut db = Self::with_capacity(0);
+            // the rows are there already, only the keys need room
+            let mut db = Self::__venndb_with_key_capacity(rows.len());
             for (index, row) in rows.iter().enumerate() {
                 #append_internal_call
             }

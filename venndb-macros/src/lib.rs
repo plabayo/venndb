@@ -123,6 +123,8 @@ fn check_method_names(errors: &Errors, fields: &[StructField]) {
             ),
         };
         for method in methods {
+            // `r#name` is the same method as `name`
+            let method = method.trim_start_matches("r#").to_owned();
             if taken.contains(&method) {
                 errors.err(
                     name,

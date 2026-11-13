@@ -151,9 +151,10 @@ impl RowSet {
     pub fn span(&self) -> usize {
         match &self.repr {
             Repr::Sparse(rows) => rows.last().map_or(0, |last| *last as usize + 1),
-            Repr::Dense(words, _) => words
-                .last()
-                .map_or(0, |last| words.len() * WORD - last.leading_zeros() as usize),
+            // the last word is never zero, and counted apart to not overflow
+            Repr::Dense(words, _) => words.last().map_or(0, |last| {
+                (words.len() - 1) * WORD + (WORD - last.leading_zeros() as usize)
+            }),
         }
     }
 
@@ -367,6 +368,47 @@ mod tests {
         assert!(dense.iter().eq(sparse.iter()));
         assert!((0..5100).all(|row| dense.contains(row) == sparse.contains(row)));
         assert!((&dense).into_iter().eq(rows.iter().copied()));
+    }
+
+    #[test]
+    fn turns_dense_at_one_row_in_64() {
+        // 16 rows over a span of 1024 is exactly 1 in 64: not dense yet
+        let mut set: RowSet = (0..15).collect();
+        assert!(set.insert(1023));
+        assert!(!is_dense(&set));
+        let mut set: RowSet = (0..15).collect();
+        assert!(set.insert(1022));
+        assert!(is_dense(&set));
+        // too few rows, however close together
+        let set: RowSet = (0..15).collect();
+        assert!(!is_dense(&set));
+    }
+
+    #[test]
+    fn turns_sparse_below_one_row_in_128() {
+        // 16 rows and one more at a span of 2048 is exactly 1 in 128: still dense
+        let mut set: RowSet = (0..16).collect();
+        assert!(set.insert(2047));
+        assert!(is_dense(&set));
+        let mut set: RowSet = (0..16).collect();
+        assert!(set.insert(2048));
+        assert!(!is_dense(&set));
+        assert_eq!(set.iter().last(), Some(2048));
+        // a row within the words there are never makes it sparse
+        let mut set: RowSet = (0..16).collect();
+        assert!(set.insert(63));
+        assert!(is_dense(&set));
+    }
+
+    #[test]
+    fn shrinks() {
+        let mut set = RowSet::new();
+        set.insert(1);
+        set.shrink_to_fit();
+        assert!(matches!(&set.repr, Repr::Sparse(rows) if rows.capacity() == 1));
+        let mut set: RowSet = (0..65).collect();
+        set.shrink_to_fit();
+        assert!(matches!(&set.repr, Repr::Dense(words, 65) if words.capacity() == 2));
     }
 
     #[test]

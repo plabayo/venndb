@@ -5,7 +5,7 @@ This database is designed for a very specific use case where you have mostly sta
 like these can be large and should be both fast and compact.
 
 For the limited usecases where `venndb` can be applied to,
-it has no dependencies and is faster then traditional choices,
+it has no runtime dependencies and is faster then traditional choices,
 such as a naive implementation or a more heavy lifted dependency such as _Sqlite_.
 
 > See [the benchmarks](#benchmarks) for more information on this topic.
@@ -277,7 +277,8 @@ db.query().skills_where(|skill| matches!(skill, Skill::Language { native: true, 
 
 It works for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and any type implementing `venndb::FilterSet`.
 For a type that is not yours use `#[venndb(filter, members = path)]`, with `path` a function
-returning an iterator over the values. Every "filter map" property has a `<property>_where` method.
+returning an iterator over the values, and `item = "Type"` if the type of those cannot be told from
+the property. Every "filter map" property has a `<property>_where` method, rows with an _any_ value always match it.
 
 > ❓ How can I filter on something that is not a property, or that changes?
 
@@ -773,7 +774,7 @@ Database: (e.g. `EmployeeInMemDB`):
 | `EmployeeInMemDB::new() -> EmployeeInMemDB` | create a new database with zero capacity |
 | `EmployeeInMemDB::default() -> EmployeeInMemDB` | same as `EmployeeInMemDB::new() -> EmployeeInMemDB` |
 | `EmployeeInMemDB::with_capacity(capacity: usize) -> EmployeeInMemDB` | create a new database with the given capacity, but no rows already inserted |
-| `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | constructor to create the database directly from a heap-allocated list of data instances. The second version is the one used if at least one `#[venndb(key)]` property is defined, otherwise it is the first one (without the `Result`). |
+| `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | constructor to create the database directly from a heap-allocated list of data instances. The second version is the one used if at least one `#[venndb(key)]` property or a `validator` is defined, otherwise it is the first one (without the `Result`). |
 | `EmployeeInMemDB::from_iter(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | Same as `from_rows` but using an iterator instead. The items do not have to be an `Employee` but can be anything that can be turned into one. E.g. in our example above we defined a struct `RawCsvRow` that was turned on the fly into an `Employee`. This happens all at once prior to inserting the database, which is why the version with a result does return a `Vec` and not an iterator. |
 | `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>)` or `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>) -> Result<(), EmployeeInMemDBError<Employee>>` | append a single row to the database. Depending on whether or not a `#[venndb(key)]` property is defined it will generate the `Result` version or not. Same as `from_rows` and `from_iter` |
 | `EmployeeInMemDB::extend<I, Item>(&mut self, iter: I) where I: ::std::iter::IntoIterator<Item = Item>, Item: ::std::convert::Into<Employee>` or `EmployeeInMemDB::extend<I, Item>(&mut self, iter: I) -> Result<(), EmployeeInMemDBError<(Employee, I::IntoIter)>> where I: ::std::iter::IntoIterator<Item = Item>, Item: ::std::convert::Into<Employee>` | extend the database with the given iterator, once again returning a result in case such insertion can go wrong (e.g. because keys are used (duplication) or a row is invalid in case a validator is defined). Otherwise this function will return nothing. |

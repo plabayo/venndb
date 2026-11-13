@@ -31,7 +31,7 @@ New Features:
   For `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`,
   or any other type using `#[venndb(filter, members = path)]`;
 * `<DB>Query::<property>_where(predicate)`: filter on what the values of a property look like,
-  the predicate is called once per distinct value;
+  the predicate is called once per distinct value, rows with an _any_ value always match;
 * [[`#16`](https://github.com/plabayo/venndb/issues/16)]: `<DB>::column(predicate)` and
   `<DB>::runtime_column()` create columns that are no property of a row, the latter can be
   changed at any time and from any thread. Add them to a query with `<DB>Query::and`;
@@ -44,7 +44,7 @@ New Features:
 
 Other Changes:
 
-* No dependencies left: `hashbrown` and `rand` are replaced by the standard library;
+* No runtime dependencies left: `hashbrown` and `rand` are replaced by the standard library;
 * Queries count and pick rows a machine word at a time, and start from the smallest set of rows;
 * Benchmarks are rewritten around a database shaped like the one of `rama`,
   and compared with `roaring` and an indexed `sqlite`;

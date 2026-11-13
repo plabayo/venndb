@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       `item` can only be used with `members`
+ --> tests/fails/item_bool.rs:6:12
+  |
+6 |     level: bool,
+  |            ^^^^

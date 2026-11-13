@@ -160,6 +160,17 @@ impl<'a> FieldAttrs<'a> {
 
         this.option_ty = ty_inner(&["Option"], &field.ty);
 
+        if item.is_some() && !matches!(set, Some(By::Path(_))) && !skipped {
+            errors.err(
+                &field.ty,
+                concat!(
+                    "Invalid field-level `venndb` attribute\n",
+                    "`item` can only be used with `members`",
+                ),
+            );
+            return this;
+        }
+
         if skipped {
             this.kind = None;
         } else if let Some(with) = key {
@@ -210,14 +221,6 @@ impl<'a> FieldAttrs<'a> {
                     concat!(
                         "Invalid field-level `venndb` attribute\n",
                         "`any` cannot be used with `set`",
-                    ),
-                );
-            } else if item.is_some() && !matches!(set, Some(By::Path(_))) {
-                errors.err(
-                    &field.ty,
-                    concat!(
-                        "Invalid field-level `venndb` attribute\n",
-                        "`item` can only be used with `members`",
                     ),
                 );
             } else {
