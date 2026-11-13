@@ -83,7 +83,7 @@ cargo add venndb
 and import the `derive` macro in the module where you want to use it:
 
 ```rust,ignore
-use venndb::VennDB
+use venndb::{Any, VennDB};
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -101,7 +101,7 @@ pub struct Employee {
 }
 
 fn main() {
-    let db = EmployeeDB::from_iter(/* .. */);
+    let db = EmployeeDB::from_iter(employees()).expect("unique ids");
 
     let mut query = db.query();
     let employee = query
@@ -116,8 +116,8 @@ fn main() {
 }
 ```
 
-See [the full example](#example) or [the "Generated Code Summary" chapter](#generated-code-summary) below
-to learn how to use the `VennDB` and its generated code.
+See [the full example](#example), [the examples](./examples) (the code in this document is taken from these)
+or [the "Generated Code Summary" chapter](#generated-code-summary) below to learn how to use the `VennDB` and its generated code.
 
 ## Benchmarks
 
@@ -137,37 +137,40 @@ of which the state, city and ASN have up to 1 000, 10 000 and 5 000 distinct val
 - `sqlite`: an in-memory table with an index per filter map (using [the `sqlite` crate (version: `0.37.4`)](https://docs.rs/sqlite/0.37.4/sqlite/));
 - `naive`: just a `Vec<Proxy>`, over which is iterated.
 
-Each query picks a random proxy among the matching ones, the numbers are the median time.
+Apart from the first two, each row is a query: the filters listed are set on `db.query()`,
+followed by `execute()` and `any()` to pick a random proxy among the matching ones. The `bool` filters ask for `true`,
+the filter maps (`pool`, `country`, `city`) for one value unless more are mentioned, and 1% of their rows match _any_ value.
+The numbers are the median time.
 The benchmarks are created by running `just bench-full | python3 scripts/bench_tables.py`.
 
 Database with `100_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database | 12.22 ms | 25.67 ms | 339.4 ms | - |
-| look up by key | 8.487 ns | 11.17 ns | 1.102 µs | 6.582 µs |
-| `tcp + socks5 + datacenter` | 994.8 ns | 1.529 µs | 4.113 ms | 646.1 µs |
-| `tcp + country` | 1.572 µs | 2.047 µs | 363 µs | 769.1 µs |
-| `tcp + datacenter + country + city` | 2.862 µs | 3.884 µs | 156.6 µs | 706.4 µs |
-| `mobile + pool + 3 countries` | 3.189 µs | 11.35 µs | 1.349 ms | 374 µs |
-| `tcp + 5 cities` | 2.144 µs | 5.967 µs | 365.5 µs | 1.027 ms |
-| `tcp + socks5 + datacenter`, not blocked (closure) | 994.8 ns | 132.7 µs | - | 672.4 µs |
-| `tcp + socks5 + datacenter`, not blocked (column) | 1.367 µs | - | - | - |
+| create the database (`from_rows`) | 12.22 ms | 25.67 ms | 339.4 ms | - |
+| look up by key (`get_by_id`) | 8.487 ns | 11.17 ns | 1.102 µs | 6.582 µs |
+| 3 `bool` filters: `tcp + socks5 + datacenter` | 994.8 ns | 1.529 µs | 4.113 ms | 646.1 µs |
+| 1 `bool` filter, 1 filter map: `tcp + country` | 1.572 µs | 2.047 µs | 363 µs | 769.1 µs |
+| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 2.862 µs | 3.884 µs | 156.6 µs | 706.4 µs |
+| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 3.189 µs | 11.35 µs | 1.349 ms | 374 µs |
+| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 2.144 µs | 5.967 µs | 365.5 µs | 1.027 ms |
+| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 994.8 ns | 132.7 µs | - | 672.4 µs |
+| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 1.367 µs | - | - | - |
 | memory of the index, at its peak | 6.483 MB | 7.476 MB | - | - |
 
 Database with `1_000_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database | 111.9 ms | 345.8 ms | 3.753 s | - |
-| look up by key | 14.3 ns | 20.77 ns | 1.144 µs | 6.874 µs |
-| `tcp + socks5 + datacenter` | 11.7 µs | 13.7 µs | 41.89 ms | 6.733 ms |
-| `tcp + country` | 14.94 µs | 17.99 µs | 6.693 ms | 8.616 ms |
-| `tcp + datacenter + country + city` | 26.46 µs | 31.08 µs | 2.296 ms | 8.609 ms |
-| `mobile + pool + 3 countries` | 29.66 µs | 106.2 µs | 11.83 ms | 5.194 ms |
-| `tcp + 5 cities` | 18.39 µs | 51.72 µs | 6.456 ms | 10.21 ms |
-| `tcp + socks5 + datacenter`, not blocked (closure) | 11.14 µs | 3.45 ms | - | 7.278 ms |
-| `tcp + socks5 + datacenter`, not blocked (column) | 15.05 µs | - | - | - |
+| create the database (`from_rows`) | 111.9 ms | 345.8 ms | 3.753 s | - |
+| look up by key (`get_by_id`) | 14.3 ns | 20.77 ns | 1.144 µs | 6.874 µs |
+| 3 `bool` filters: `tcp + socks5 + datacenter` | 11.7 µs | 13.7 µs | 41.89 ms | 6.733 ms |
+| 1 `bool` filter, 1 filter map: `tcp + country` | 14.94 µs | 17.99 µs | 6.693 ms | 8.616 ms |
+| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 26.46 µs | 31.08 µs | 2.296 ms | 8.609 ms |
+| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 29.66 µs | 106.2 µs | 11.83 ms | 5.194 ms |
+| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 18.39 µs | 51.72 µs | 6.456 ms | 10.21 ms |
+| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 11.14 µs | 3.45 ms | - | 7.278 ms |
+| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 15.05 µs | - | - | - |
 | memory of the index, at its peak | 61.79 MB | 59.49 MB | - | - |
 
 We are not database nor hardware experts though. Please do open an issue if you think
@@ -223,6 +226,7 @@ Usage:
 
 ```rust,ignore
 use venndb::{Any, VennDB};
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Department {
   Any,
@@ -232,7 +236,7 @@ pub enum Department {
 
 impl Any for Department {
   fn is_any(&self) -> bool {
-    self == Department::Any
+    self == &Self::Any
   }
 }
 
@@ -255,7 +259,7 @@ assert_eq!(hr_employees.len(), 2);
 ```
 
 For a type that is not yours you can point to a function instead of implementing `Any`:
-`#[venndb(filter, any = Department::is_any)]`.
+`#[venndb(filter, any = is_any)]`.
 
 > ❓ How can a property have multiple values?
 
@@ -271,8 +275,8 @@ pub struct Employee {
 
 // everyone with this skill, or with a skill for which the predicate,
 // called once per distinct skill and not once per row, returns true
-db.query().skills(Skill::Rust);
-db.query().skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }));
+query.skills(Skill::Rust);
+query.skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }));
 ```
 
 It works for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and any type implementing `venndb::FilterSet`.
@@ -289,9 +293,9 @@ Create a column for it and add it to the query:
 let seniors = db.column(|employee| employee.years > 10);
 // set and unset at any time and from any thread, without a lock
 let on_leave = db.runtime_column();
-on_leave.set(db.index_by_id(&42).unwrap(), true);
+on_leave.set(db.index_by_id(&35).unwrap(), true);
 
-db.query().and(Filter::Is(&seniors)).and(Filter::Runtime(&on_leave, false));
+query.is_manager(true).and(Filter::Is(&seniors)).and(Filter::Runtime(&on_leave, false));
 ```
 
 Both only know about the rows the database had when they were created.
@@ -331,40 +335,27 @@ assert!(db.append(Value {
 Let's say I have the following `struct`:
 
 ```rust,ignore
-use venndb::{Any, VennDB};
-
 #[derive(Debug, VennDB)]
 pub struct Value {
-   #[venndb(filter, any)]
-   pub foo: MyString,
+   #[venndb(filter, any = is_any)]
+   pub foo: String,
    pub bar: u32,
 }
 
-#[derive(Debug)]
-pub struct MyString(String);
-
-impl Any for MyString {
-    fn is_any(&self) -> bool {
-        self.0 == "*"
-    }
+fn is_any(value: &String) -> bool {
+    value == "*"
 }
 
 let db = ValueDB::from_iter([
-    Value {
-        foo: MyString("foo".to_owned()),
-        bar: 8,
-    },
-    Value {
-        foo: MyString("*".to_owned()),
-        bar: 16,
-    }
-].into_Iter()).unwrap();
+    Value { foo: "foo".to_owned(), bar: 8 },
+    Value { foo: "*".to_owned(), bar: 16 },
+]);
 
 let mut query = db.query();
-query.foo(MyString("*".to_owned()));
+query.foo("*".to_owned());
 let value = query.execute().unwrap().any();
 // this will never match the row with bar == 8,
-// tiven foo != an any value
+// given foo != an any value
 assert_eq!(value.bar, 16);
 ```
 
@@ -388,8 +379,6 @@ rows that have either of these values.
 Example
 
 ```rust,ignore
-use venndb::{Any, VennDB};
-
 #[derive(Debug, VennDB)]
 pub struct Value {
    #[venndb(filter)]
@@ -398,27 +387,18 @@ pub struct Value {
 }
 
 let db = ValueDB::from_iter([
-    Value {
-        foo: "a".to_owned(),
-        bar: 8,
-    },
-    Value {
-        foo: "b".to_owned(),
-        bar: 12,
-    },
-    Value {
-        foo: "c".to_owned(),
-        bar: 16,
-    },
-].into_Iter()).unwrap();
+    Value { foo: "a".to_owned(), bar: 8 },
+    Value { foo: "b".to_owned(), bar: 12 },
+    Value { foo: "c".to_owned(), bar: 16 },
+]).unwrap();
 
 let mut query = db.query();
-query.foo(MyString("a".to_owned()));
-query.foo(MyString("c".to_owned()));
+query.foo("a".to_owned());
+query.foo("c".to_owned());
 let values: Vec<_> = query.execute().unwrap().iter().collect();
 assert_eq!(values.len(), 2);
 assert_eq!(values[0].bar, 8);
-assert_eq!(values[0].bar, 16);
+assert_eq!(values[1].bar, 16);
 ```
 
 ## Example
@@ -820,9 +800,9 @@ but is [tested using Github Actions](https://github.com/plabayo/venndb/blob/main
 
 | platform | tested | test platform |
 |----------|--------|---------------|
-| MacOS    | ✅     | M2 (developer laptop) and macos-12 Intel ([GitHub Action](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners)) |
-| Windows  | ✅     | Windows 2022 ([GitHub Action](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners)) |
-| Linux    | ✅     | Ubuntu 22.04 ([GitHub Action](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners)) |
+| MacOS    | ✅     | M4 Max (developer laptop) and macOS 26 arm64 ([GitHub Action](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners)) |
+| Windows  | ✅     | Windows Server 2025 ([GitHub Action](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners)) |
+| Linux    | ✅     | Ubuntu 24.04 ([GitHub Action](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners)) |
 
 Please [open a ticket](https://github.com/plabayo/venndb/issues) in case you have compatibility issues for your setup/platform.
 Our goal is not to support all possible platformns in the world, but we do want to

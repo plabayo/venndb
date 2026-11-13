@@ -106,8 +106,31 @@ sqlite = { workspace = true }
 workspace = true
 
 [[example]]
+name = "any"
+required-features = ["derive"]
+
+[[example]]
+name = "columns"
+required-features = ["derive"]
+
+[[example]]
 name = "fleet"
 required-features = ["derive"]
+
+[[example]]
+name = "sets"
+required-features = ["derive"]
+
+[[example]]
+name = "usage"
+required-features = ["derive"]
+
+[[example]]
+name = "validator"
+required-features = ["derive"]
+
+[[example]]
+name = "engine"
 
 [[bench]]
 name = "proxydb"

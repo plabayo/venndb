@@ -4,6 +4,7 @@
 //!
 //! Run with `cargo run --example fleet`.
 
+use std::collections::HashSet;
 use venndb::{Filter, VennDB};
 
 /// A way to reach a server. One server offers several of these.
@@ -54,7 +55,7 @@ pub struct Server {
     tier: Tier,
     /// A row matches each of the values in a set.
     #[venndb(filter, set)]
-    endpoints: Vec<Endpoint>,
+    endpoints: HashSet<Endpoint>,
     /// No need to implement `venndb::Any`, a function will do.
     #[venndb(filter, any = Location::is_anywhere)]
     country: Option<Location>,
@@ -69,7 +70,7 @@ fn server(id: u32, tier: Tier, endpoints: &[Endpoint], country: &str, city: &str
         id,
         address: format!("10.0.0.{id}"),
         tier,
-        endpoints: endpoints.to_vec(),
+        endpoints: endpoints.iter().cloned().collect(),
         country: Some(country.into()),
         city: (!city.is_empty()).then(|| city.into()),
         gpu: id.is_multiple_of(2),
@@ -185,4 +186,9 @@ fn main() {
         "picked server {} at {} and odd server {}",
         lucky.id, lucky.address, odd.id
     );
+}
+
+#[test]
+fn runs() {
+    main();
 }

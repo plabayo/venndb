@@ -10,15 +10,15 @@ from collections import OrderedDict
 DATABASES = ["VennProxyDB", "RoaringProxyDB", "SqliteProxyDB", "NaiveProxyDB"]
 TITLES = OrderedDict(
     [
-        ("build", "create the database"),
-        ("get_by_id", "look up by key"),
-        ("pick/bools", "`tcp + socks5 + datacenter`"),
-        ("pick/country", "`tcp + country`"),
-        ("pick/city", "`tcp + datacenter + country + city`"),
-        ("pick/countries", "`mobile + pool + 3 countries`"),
-        ("pick/cities", "`tcp + 5 cities`"),
-        ("pick_if/bools", "`tcp + socks5 + datacenter`, not blocked (closure)"),
-        ("pick_column/bools", "`tcp + socks5 + datacenter`, not blocked (column)"),
+        ("build", "create the database (`from_rows`)"),
+        ("get_by_id", "look up by key (`get_by_id`)"),
+        ("pick/bools", "3 `bool` filters: `tcp + socks5 + datacenter`"),
+        ("pick/country", "1 `bool` filter, 1 filter map: `tcp + country`"),
+        ("pick/city", "2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city`"),
+        ("pick/countries", "1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries`"),
+        ("pick/cities", "1 `bool` filter, 1 filter map: `tcp + 5 cities`"),
+        ("pick_if/bools", "3 `bool` filters and a predicate: `tcp + socks5 + datacenter`"),
+        ("pick_column/bools", "3 `bool` filters and a runtime column: `tcp + socks5 + datacenter`"),
     ]
 )
 

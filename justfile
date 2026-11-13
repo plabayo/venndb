@@ -35,6 +35,7 @@ hack:
 
 test:
 	cargo test --all-features --workspace
+	cargo test --all-features --workspace --examples
 
 qa: lint check clippy doc hack test
 

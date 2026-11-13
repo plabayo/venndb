@@ -82,7 +82,8 @@ Other Changes:
 * Queries count and pick rows a machine word at a time, and start from the smallest set of rows;
 * Rewrite benchmarks around a database shaped like the one of `rama`,
   compared with `roaring` and an indexed `sqlite`;
-* The fuzzer now compares queries with a scan of the rows.
+* The fuzzer now compares queries with a scan of the rows;
+* Add examples, and test that the code shown in the README and on the website is part of them.
 
 # 0.6.1 (2025-11-18)
 

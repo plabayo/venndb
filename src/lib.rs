@@ -78,6 +78,8 @@ impl<T: Any> Any for Box<T> {
 /// A trait that types can implement in order to support `#[venndb(filter, set)]`
 /// attribute filters: a field with several values, of which a row matches each.
 ///
+/// A value that is in the set more than once counts once, a list is as good as a set.
+///
 /// Use `#[venndb(filter, members = path)]` instead for a type that is not yours.
 ///
 /// # Example
