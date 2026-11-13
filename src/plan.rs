@@ -39,6 +39,17 @@ impl<'a> RowSets<'a> {
         }
     }
 
+    /// A list of the given sets, which the caller knows to be all different.
+    pub(crate) fn distinct(sets: impl IntoIterator<Item = &'a RowSet>) -> Self {
+        let mut sets = sets.into_iter();
+        let mut first = [None; 3];
+        first.iter_mut().for_each(|slot| *slot = sets.next());
+        Self {
+            first,
+            more: sets.collect(),
+        }
+    }
+
     /// Iterate over the sets, in the order they were added.
     pub fn iter(&self) -> impl Iterator<Item = &'a RowSet> + Clone + '_ {
         self.first.iter().flatten().chain(&self.more).copied()
@@ -104,8 +115,16 @@ pub struct Plan<'a> {
 
 impl<'a> Plan<'a> {
     /// Create a plan for a database with the given number of rows.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are more rows than [`RowSet::MAX_ROWS`].
     #[must_use]
     pub fn new(rows: usize, slots: usize) -> Self {
+        assert!(
+            rows <= RowSet::MAX_ROWS,
+            "venndb: a database holds at most u32::MAX rows"
+        );
         Self {
             rows,
             slots: vec![None; slots],
@@ -120,6 +139,10 @@ impl<'a> Plan<'a> {
     }
 
     /// Set the filter of a slot, replacing the one it had.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the plan has no such slot.
     pub fn set(&mut self, slot: usize, filter: Filter<'a>) {
         self.slots[slot] = Some(filter);
     }
@@ -127,6 +150,11 @@ impl<'a> Plan<'a> {
     /// Add a set to the [`Filter::AnyOf`] of a slot.
     ///
     /// Adding `None` adds no rows, but the slot does become a filter.
+    /// A filter of another kind in the slot is replaced.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the plan has no such slot.
     pub fn or(&mut self, slot: usize, set: Option<&'a RowSet>) {
         if !matches!(self.slots[slot], Some(Filter::AnyOf(_))) {
             self.slots[slot] = Some(Filter::AnyOf(RowSets::new()));
@@ -518,6 +546,53 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "at most u32::MAX rows")]
+    fn rows_have_to_fit() {
+        let _ = Plan::new(RowSet::MAX_ROWS + 1, 0);
+    }
+
+    #[test]
+    fn random_reaches_every_row() {
+        let odd: RowSet = (0..640).filter(|row| row % 2 == 1).collect();
+        let few: RowSet = [3, 500, 77].into_iter().collect();
+        let column = RuntimeColumn::new(0);
+        let mut plans = [
+            Plan::new(8, 0),
+            Plan::new(640, 0),
+            Plan::new(640, 0),
+            Plan::new(640, 0),
+        ];
+        plans[1].and(Filter::Not(&odd));
+        plans[1].and(Filter::Runtime(&column, false));
+        plans[2].and(Filter::Is(&few));
+        plans[3].and(Filter::Is(&odd));
+        plans[3].and(Filter::Not(&few));
+        for plan in &plans {
+            let matches = plan.execute().unwrap();
+            let rows: Vec<usize> = matches.iter().collect();
+            let mut seen = std::collections::BTreeSet::new();
+            for _ in 0..rows.len() * 40 {
+                seen.insert(matches.random());
+                let row = matches.random_where(|row| row % 3 != 0).unwrap();
+                assert!(row % 3 != 0 && rows.contains(&row));
+            }
+            assert!(seen.iter().eq(rows.iter()), "{seen:?}");
+        }
+    }
+
+    #[test]
+    fn many_distinct_sets() {
+        let sets: Vec<RowSet> = (0..10).map(|row| [row].into_iter().collect()).collect();
+        let list = RowSets::distinct(&sets);
+        assert!(list.iter().eq(sets.iter()));
+        assert_eq!(RowSets::distinct(&sets[..2]).iter().count(), 2);
+        let mut list: RowSets<'_> = sets.iter().chain(&sets).collect();
+        assert!(list.iter().eq(sets.iter()));
+        list.push(&sets[9]);
+        assert_eq!(list.iter().count(), 10);
+    }
+
+    #[test]
     fn no_filters_match_all_rows() {
         assert!(Plan::new(0, 0).execute().is_none());
         assert_eq!(found(Plan::new(3, 2).execute()), [0, 1, 2]);
@@ -578,7 +653,7 @@ mod tests {
         plan.and(Filter::Is(&small));
         let matches = plan.execute().unwrap();
         assert!(matches!(matches.0, Repr2::Rows(_)));
-        assert_eq!(matches.len(), 40);
+        assert!(matches.iter().eq((0..40).map(|row| row * 200)));
         // one row too many to walk
         let small: RowSet = (0..41).map(|row| row * 200).collect();
         let mut plan = Plan::new(rows, 0);
@@ -586,7 +661,7 @@ mod tests {
         plan.and(Filter::Is(&small));
         let matches = plan.execute().unwrap();
         assert!(matches!(matches.0, Repr2::Mask(..)));
-        assert_eq!(matches.len(), 41);
+        assert!(matches.iter().eq((0..41).map(|row| row * 200)));
     }
 
     #[test]

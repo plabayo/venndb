@@ -14,7 +14,7 @@ pub(crate) const WORD: usize = u64::BITS as usize;
 /// Stored as a sorted list of rows as long as few rows are in it,
 /// and as a bitmask with one bit per row once many are.
 /// The two forms behave the same, the set picks the smallest one on its own.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 pub struct RowSet {
     repr: Repr,
 }
@@ -33,7 +33,32 @@ impl Default for Repr {
     }
 }
 
+/// Sets are equal if they hold the same rows, whatever the form they are stored in.
+impl PartialEq for RowSet {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for RowSet {}
+
+/// The row as it is stored.
+///
+/// # Panics
+///
+/// Panics if the row is not below [`RowSet::MAX_ROWS`].
+pub(crate) fn stored(row: usize) -> u32 {
+    assert!(
+        row < RowSet::MAX_ROWS,
+        "venndb: a database holds at most u32::MAX rows"
+    );
+    row as u32
+}
+
 impl RowSet {
+    /// The number of rows a database can hold: rows are numbered below it.
+    pub const MAX_ROWS: usize = u32::MAX as usize;
+
     /// Create an empty set.
     #[must_use]
     pub const fn new() -> Self {
@@ -74,9 +99,9 @@ impl RowSet {
     ///
     /// # Panics
     ///
-    /// Panics if the row does not fit in an `u32`.
+    /// Panics if the row is not below [`RowSet::MAX_ROWS`].
     pub fn insert(&mut self, row: usize) -> bool {
-        let small = u32::try_from(row).expect("venndb: a database holds at most u32::MAX rows");
+        let small = stored(row);
         match &mut self.repr {
             Repr::Sparse(rows) => {
                 match rows.last() {
@@ -87,7 +112,7 @@ impl RowSet {
                     _ => rows.push(small),
                 }
                 let span = rows.last().map_or(0, |last| *last as usize + 1);
-                if rows.len() >= DENSE_MIN && rows.len() * DENSE_RATIO > span {
+                if rows.len() >= DENSE_MIN && rows.len() as u64 * DENSE_RATIO as u64 > span as u64 {
                     self.repr = Repr::Dense(dense(rows, span), rows.len());
                 }
                 true
@@ -96,7 +121,7 @@ impl RowSet {
                 let (at, bit) = (row / WORD, 1 << (row % WORD));
                 if at >= words.len() {
                     // far beyond the last row: the set is thin again
-                    if *ones * DENSE_RATIO * 2 < row + 1 {
+                    if (*ones as u64 * DENSE_RATIO as u64 * 2) < row as u64 + 1 {
                         let mut rows = sparse(words, *ones + 1);
                         rows.push(small);
                         self.repr = Repr::Sparse(rows);
@@ -310,8 +335,10 @@ mod tests {
         assert_eq!(set.len(), DENSE_MIN + 2);
         assert!(set.contains(5) && set.contains(1000) && !set.contains(999));
         assert!(!set.contains(100_000));
-        let rows: Vec<_> = set.iter().collect();
-        assert!(rows.is_sorted() && rows.len() == set.len());
+        let mut expected: Vec<usize> = (0..DENSE_MIN).map(|row| row * 2).collect();
+        expected.extend([5, 1000]);
+        expected.sort_unstable();
+        assert!(set.iter().eq(expected));
     }
 
     #[test]
@@ -372,7 +399,71 @@ mod tests {
     #[test]
     #[should_panic(expected = "at most u32::MAX rows")]
     fn row_has_to_fit() {
-        RowSet::new().insert(u32::MAX as usize + 1);
+        RowSet::new().insert(RowSet::MAX_ROWS);
+    }
+
+    #[test]
+    fn last_row() {
+        let last = RowSet::MAX_ROWS - 1;
+        let mut set: RowSet = (0..DENSE_MIN).collect();
+        assert!(set.insert(last));
+        assert!(!set.insert(last));
+        assert_eq!(set.span(), RowSet::MAX_ROWS);
+        assert_eq!(set.nth(DENSE_MIN), Some(last));
+        assert!(set.contains(last));
+        assert_eq!(stored(last), u32::MAX - 1);
+    }
+
+    #[test]
+    fn equal_whatever_the_form() {
+        let dense: RowSet = (0..16).chain([1500]).collect();
+        let sparse: RowSet = [1500].into_iter().chain(0..16).collect();
+        assert!(is_dense(&dense) && !is_dense(&sparse));
+        assert_eq!(dense, sparse);
+        assert_eq!(sparse, dense);
+        let other: RowSet = [1501].into_iter().chain(0..16).collect();
+        assert_ne!(dense, other);
+        assert_ne!(sparse, other);
+        assert_ne!(sparse, (0..16).collect());
+        assert_ne!(RowSet::new(), [0].into_iter().collect());
+    }
+
+    #[test]
+    fn random_inserts_match_a_model() {
+        let mut state = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = |limit: usize| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state % limit as u64) as usize
+        };
+        for round in 0..200 {
+            let span = [70, 300, 5000, 200_000][round % 4];
+            let mut set = RowSet::new();
+            let mut model = std::collections::BTreeSet::new();
+            for _ in 0..next(400) + 1 {
+                let row = if next(4) == 0 {
+                    next(span * 40)
+                } else {
+                    next(span)
+                };
+                assert_eq!(set.insert(row), model.insert(row));
+                if let Repr::Dense(words, ones) = &set.repr {
+                    assert_ne!(words.last(), Some(&0));
+                    let counted: u32 = words.iter().map(|word| word.count_ones()).sum();
+                    assert_eq!(counted as usize, *ones);
+                }
+            }
+            assert_eq!(set.len(), model.len());
+            assert!(set.iter().eq(model.iter().copied()));
+            assert_eq!(set.span(), model.last().map_or(0, |last| last + 1));
+            for (n, row) in model.iter().enumerate() {
+                assert_eq!(set.nth(n), Some(*row));
+                assert!(set.contains(*row));
+                assert_eq!(set.contains(row + 1), model.contains(&(row + 1)));
+            }
+            assert_eq!(set.nth(model.len()), None);
+        }
     }
 
     #[test]

@@ -87,6 +87,8 @@ fn impl_from_args_struct(
         })
         .collect();
 
+    check_method_names(errors, &fields);
+
     let name_db = match &type_attrs.name {
         Some(name) => format_ident!("{}", name.value()),
         None => format_ident!("{}DB", name),
@@ -102,5 +104,37 @@ fn impl_from_args_struct(
 
     quote! {
         #db_code
+    }
+}
+
+/// Report the filters of which a generated query method would exist twice.
+fn check_method_names(errors: &Errors, fields: &[StructField]) {
+    let mut taken: Vec<String> = ["and", "reset", "execute"].map(String::from).into();
+    for info in fields.iter().filter_map(StructField::info) {
+        let (name, methods) = match &info {
+            field::FieldInfo::Key(_) => continue,
+            field::FieldInfo::Filter(field) => (field.name, vec![field.name.to_string()]),
+            field::FieldInfo::FilterMap(field) => (
+                field.name,
+                vec![
+                    field.name.to_string(),
+                    field.where_method_name().to_string(),
+                ],
+            ),
+        };
+        for method in methods {
+            if taken.contains(&method) {
+                errors.err(
+                    name,
+                    &format!(
+                        "Invalid field-level `venndb` attribute\n\
+                         A filter on this field needs a query method `{method}`, which exists already: \
+                         rename the field or use `#[venndb(skip)]`",
+                    ),
+                );
+            } else {
+                taken.push(method);
+            }
+        }
     }
 }

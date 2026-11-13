@@ -1,0 +1,17 @@
+error: Invalid field-level `venndb` attribute
+       A filter on this field needs a query method `tag_where`, which exists already: rename the field or use `#[venndb(skip)]`
+ --> tests/fails/method_where.rs:7:5
+  |
+7 |     tag_where: bool,
+  |     ^^^^^^^^^
+
+error[E0592]: duplicate definitions with name `tag_where`
+ --> tests/fails/method_where.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^
+  |                 |
+  |                 duplicate definitions for `tag_where`
+  |                 other definition for `tag_where`
+  |
+  = note: this error originates in the derive macro `VennDB` (in Nightly builds, run with -Z macro-backtrace for more info)

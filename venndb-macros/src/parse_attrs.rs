@@ -98,13 +98,23 @@ impl<'a> FieldAttrs<'a> {
                         } else {
                             any = Some(path_value(errors, &meta).map_or(By::Trait, By::Path));
                         }
-                    } else if name.is_ident("set") {
-                        if errors.expect_meta_word(&meta).is_some() && set.is_none() {
-                            set = Some(By::Trait);
-                        }
-                    } else if name.is_ident("members") {
-                        if let Some(path) = path_value(errors, &meta) {
-                            set = Some(By::Path(path));
+                    } else if name.is_ident("set") || name.is_ident("members") {
+                        let by = if name.is_ident("set") {
+                            errors.expect_meta_word(&meta).map(|_| By::Trait)
+                        } else {
+                            errors.expect_meta_name_value(&meta);
+                            path_value(errors, &meta).map(By::Path)
+                        };
+                        if set.is_some() {
+                            errors.err(
+                                &meta,
+                                concat!(
+                                    "Invalid field-level `venndb` attribute\n",
+                                    "Expected only one of: `set`, `members`",
+                                ),
+                            );
+                        } else {
+                            set = by;
                         }
                     } else if name.is_ident("item") {
                         if let Some(m) = errors.expect_meta_name_value(&meta) {
@@ -184,6 +194,14 @@ impl<'a> FieldAttrs<'a> {
                     concat!(
                         "Invalid field-level `venndb` attribute\n",
                         "`any` cannot be used with `set`",
+                    ),
+                );
+            } else if item.is_some() && !matches!(set, Some(By::Path(_))) {
+                errors.err(
+                    &field.ty,
+                    concat!(
+                        "Invalid field-level `venndb` attribute\n",
+                        "`item` can only be used with `members`",
                     ),
                 );
             } else {

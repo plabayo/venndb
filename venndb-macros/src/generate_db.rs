@@ -304,7 +304,7 @@ fn generate_db_struct_method_append(
         Some(validator) => {
             let err = DbError::generate_invalid_row_error_kind_creation(name_db);
             quote! {
-                if !#validator(&data) {
+                if !#validator(__venndb_row) {
                     return Err(#err);
                 }
             }
@@ -320,15 +320,16 @@ fn generate_db_struct_method_append(
                 let column = field.column_name();
                 let field_name = field.name;
                 let key = match field.with {
-                    Some(with) => quote! { #with(data) },
-                    None => quote! { ::std::clone::Clone::clone(&data.#field_name) },
+                    Some(with) => quote! { #with(__venndb_row) },
+                    None => quote! { ::std::clone::Clone::clone(&__venndb_row.#field_name) },
                 };
+                let key_name = format_ident!("__venndb_{}", column);
                 let db_duplicate_error_kind_creation =
                     DbError::generate_duplicate_key_error_kind_creation(name_db);
 
                 Some(quote! {
-                    let #column = #key;
-                    if self.#column.contains(&#column) {
+                    let #key_name = #key;
+                    if self.#column.contains(&#key_name) {
                         return Err(#db_duplicate_error_kind_creation);
                     }
                 })
@@ -342,8 +343,9 @@ fn generate_db_struct_method_append(
         .map(|info| match info {
             FieldInfo::Key(field) => {
                 let column = field.column_name();
+                let key_name = format_ident!("__venndb_{}", column);
                 quote! {
-                    self.#column.insert(#column, index);
+                    self.#column.insert(#key_name, __venndb_index);
                 }
             }
             FieldInfo::Filter(field) => {
@@ -351,60 +353,81 @@ fn generate_db_struct_method_append(
                 let column = field.column_name();
                 if field.optional {
                     quote! {
-                        self.#column.push(data.#name);
+                        self.#column.push(__venndb_row.#name);
                     }
                 } else {
                     quote! {
-                        self.#column.push(::std::option::Option::Some(data.#name));
+                        self.#column.push(::std::option::Option::Some(__venndb_row.#name));
                     }
                 }
             }
             FieldInfo::FilterMap(field) => {
                 let name = field.name;
                 let column = field.column_name();
+                let any_fn = field.any_fn_name();
                 let push = match (field.set, field.any) {
                     (Some(By::Trait), _) => quote! {
-                        ::venndb::FilterSet::for_each_member(value, |member| {
-                            self.#column.push(index, member);
+                        ::venndb::FilterSet::for_each_member(__venndb_value, |__venndb_member| {
+                            self.#column.push(__venndb_index, __venndb_member);
                         });
                     },
                     (Some(By::Path(members)), _) => quote! {
-                        for member in #members(value) {
-                            self.#column.push(index, ::std::borrow::Borrow::borrow(&member));
+                        for __venndb_member in #members(__venndb_value) {
+                            self.#column.push(
+                                __venndb_index,
+                                ::std::borrow::Borrow::borrow(&__venndb_member),
+                            );
                         }
                     },
-                    (None, Some(any)) => {
-                        let is_any = match any {
-                            By::Trait => quote! { ::venndb::Any::is_any(value) },
-                            By::Path(is_any) => quote! { #is_any(value) },
-                        };
-                        quote! {
-                            if #is_any {
-                                self.#column.push_any(index);
-                            } else {
-                                self.#column.push(index, value);
-                            }
+                    (None, Some(_)) => quote! {
+                        if Self::#any_fn(__venndb_value) {
+                            self.#column.push_any(__venndb_index);
+                        } else {
+                            self.#column.push(__venndb_index, __venndb_value);
                         }
-                    }
+                    },
                     (None, None) => quote! {
-                        self.#column.push(index, value);
+                        self.#column.push(__venndb_index, __venndb_value);
                     },
                 };
                 if field.optional {
                     quote! {
-                        if let ::std::option::Option::Some(value) = &data.#name {
+                        if let ::std::option::Option::Some(__venndb_value) = &__venndb_row.#name {
                             #push
                         }
                     }
                 } else {
                     quote! {
                         {
-                            let value = &data.#name;
+                            let __venndb_value = &__venndb_row.#name;
                             #push
                         }
                     }
                 }
             }
+        })
+        .collect();
+
+    // the functions of the user are called where no name of ours is in their way
+    let any_fns: Vec<_> = fields
+        .iter()
+        .filter_map(|info| match info {
+            FieldInfo::FilterMap(field) => {
+                let any_fn = field.any_fn_name();
+                let ty = field.ty;
+                let is_any = match field.any? {
+                    By::Trait => quote! { ::venndb::Any::is_any(__venndb_value) },
+                    By::Path(is_any) => quote! { #is_any(__venndb_value) },
+                };
+                Some(quote! {
+                    #[doc(hidden)]
+                    #[inline]
+                    fn #any_fn(__venndb_value: &#ty) -> bool {
+                        #is_any
+                    }
+                })
+            }
+            FieldInfo::Key(_) | FieldInfo::Filter(_) => None,
         })
         .collect();
 
@@ -458,7 +481,13 @@ fn generate_db_struct_method_append(
             #append_return_output
         }
 
-        fn append_internal(&mut self, data: &#name, index: usize) -> #append_kind_return_type {
+        #(#any_fns)*
+
+        fn append_internal(&mut self, __venndb_row: &#name, __venndb_index: usize) -> #append_kind_return_type {
+            assert!(
+                __venndb_index < ::venndb::RowSet::MAX_ROWS,
+                "venndb: a database holds at most u32::MAX rows"
+            );
             #validator_check
             #(#db_field_insert_checks)*
             #(#db_field_insert_commits)*
@@ -552,9 +581,9 @@ fn generate_query_struct(
                 let ty = value_ty(field);
                 let slot = slots;
                 slots += 1;
+                let any_fn = field.any_fn_name();
                 let is_any = match field.any {
-                    Some(By::Trait) => quote! { ::venndb::Any::is_any(&value) },
-                    Some(By::Path(is_any)) => quote! { #is_any(&value) },
+                    Some(_) => quote! { #name_db::#any_fn(&value) },
                     None => quote! { false },
                 };
                 let doc = format!(

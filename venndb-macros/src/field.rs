@@ -78,6 +78,11 @@ impl FilterMapField<'_> {
     pub fn where_method_name(&self) -> Ident {
         format_ident!("{}_where", self.name)
     }
+
+    /// The name of the function telling if a value is a wildcard.
+    pub fn any_fn_name(&self) -> Ident {
+        format_ident!("__venndb_any_{}", self.name)
+    }
 }
 
 impl<'a> StructField<'a> {

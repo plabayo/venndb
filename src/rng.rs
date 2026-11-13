@@ -33,9 +33,11 @@ mod tests {
     fn stays_below_limit() {
         assert_eq!(below(0), 0);
         assert_eq!(below(1), 0);
-        for limit in [2, 3, 10, 1000] {
+        for limit in [2, 3, 10, 1000, usize::MAX] {
             assert!((0..1000).all(|_| below(limit) < limit));
         }
+        // large limits are not cut short
+        assert!((0..100).any(|_| below(usize::MAX) > usize::MAX / 2));
     }
 
     #[test]

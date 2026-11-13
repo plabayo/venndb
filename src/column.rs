@@ -60,9 +60,9 @@ impl<K: Hash + Eq> KeyIndex<K> {
     ///
     /// # Panics
     ///
-    /// Panics if the row does not fit in an `u32`.
+    /// Panics if the row is not below [`RowSet::MAX_ROWS`].
     pub fn insert(&mut self, key: K, row: usize) -> bool {
-        let row = u32::try_from(row).expect("venndb: a database holds at most u32::MAX rows");
+        let row = crate::rowset::stored(row);
         match self.rows.entry(key) {
             Entry::Occupied(_) => false,
             Entry::Vacant(entry) => {
@@ -96,6 +96,9 @@ impl BoolColumn {
 
     /// Add the value of the next row,
     /// a row without value matches neither `true` nor `false`.
+    ///
+    /// The column has to get a value for every row of the database:
+    /// what a filter on it does for rows it knows nothing of is not defined.
     pub fn push(&mut self, value: Option<bool>) {
         let row = self.len;
         self.len += 1;
@@ -175,7 +178,8 @@ impl<T: Hash + Eq> ValueColumn<T> {
             *slot as usize
         } else {
             let slot = self.rows.len();
-            self.slots.insert(value.clone(), slot as u32);
+            let stored = u32::try_from(slot).expect("venndb: too many distinct values");
+            self.slots.insert(value.clone(), stored);
             self.rows.push(RowSet::new());
             slot
         };
@@ -227,14 +231,13 @@ impl<T: Hash + Eq> ValueColumn<T> {
     ///
     /// The predicate is called once per distinct value, not once per row.
     pub fn filter_where<'a>(&'a self, plan: &mut Plan<'a>, mut predicate: impl FnMut(&T) -> bool) {
-        let mut sets: crate::plan::RowSets<'a> = self
+        // the sets of distinct values are distinct: no need to look for doubles
+        let sets = self
             .values()
             .filter(|(value, rows)| !rows.is_empty() && predicate(value))
             .map(|(_, rows)| rows)
-            .collect();
-        if !self.any.is_empty() {
-            sets.push(&self.any);
-        }
+            .chain(Some(&self.any).filter(|any| !any.is_empty()));
+        let sets = crate::plan::RowSets::distinct(sets);
         plan.and(Filter::AnyOf(sets));
     }
 
@@ -273,15 +276,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "at most u32::MAX rows")]
     fn key_row_has_to_fit() {
-        KeyIndex::new().insert(1, u32::MAX as usize + 1);
+        KeyIndex::new().insert(1, RowSet::MAX_ROWS);
     }
 
     #[test]
     fn bool_column() {
         let mut column = BoolColumn::new();
-        let mut plan = Plan::new(0, 1);
-        column.filter(&mut plan, 0, false);
-        assert_eq!(rows(&plan), []);
         for value in [true, false, false, true] {
             column.push(Some(value));
         }
@@ -296,7 +296,13 @@ mod tests {
     #[test]
     fn bool_column_without_value() {
         let mut column = BoolColumn::new();
-        for value in [Some(true), Some(false), None, Some(false), None, Some(true)] {
+        for value in [Some(true), Some(false)] {
+            column.push(value);
+        }
+        let mut plan = Plan::new(2, 1);
+        column.filter(&mut plan, 0, false);
+        assert_eq!(rows(&plan), [1]);
+        for value in [None, Some(false), None, Some(true)] {
             column.push(value);
         }
         column.shrink_to_fit();

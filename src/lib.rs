@@ -166,3 +166,51 @@ impl<S: FilterSet + ?Sized> FilterSet for std::sync::Arc<S> {
         S::for_each_member(self, f);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{BTreeSet, HashSet};
+    use std::sync::Arc;
+
+    struct Star(char);
+
+    impl Any for Star {
+        fn is_any(&self) -> bool {
+            self.0 == '*'
+        }
+    }
+
+    #[test]
+    fn any_through_wrappers() {
+        for (value, any) in [('*', true), ('a', false)] {
+            assert_eq!(Star(value).is_any(), any);
+            assert_eq!(<&Star as Any>::is_any(&&Star(value)), any);
+            assert_eq!(Some(Star(value)).is_any(), any);
+            assert_eq!(Arc::new(Star(value)).is_any(), any);
+            assert_eq!(std::rc::Rc::new(Star(value)).is_any(), any);
+            assert_eq!(Box::new(Star(value)).is_any(), any);
+        }
+        assert!(!None::<Star>.is_any());
+    }
+
+    fn members<S: FilterSet<Item = u8> + ?Sized>(set: &S) -> Vec<u8> {
+        let mut members = Vec::new();
+        set.for_each_member(|member| members.push(*member));
+        members.sort_unstable();
+        members
+    }
+
+    #[test]
+    fn members_of_sets() {
+        assert_eq!(members(&vec![3, 1]), [1, 3]);
+        assert_eq!(members(&[3, 1][..]), [1, 3]);
+        assert_eq!(members(&[3, 1]), [1, 3]);
+        assert_eq!(members(&HashSet::from([3, 1])), [1, 3]);
+        assert_eq!(members(&BTreeSet::from([3, 1])), [1, 3]);
+        assert_eq!(members(&&vec![3, 1]), [1, 3]);
+        assert_eq!(members(&Box::new(vec![3, 1])), [1, 3]);
+        assert_eq!(members(&Arc::<[u8]>::from([3, 1])), [1, 3]);
+        assert_eq!(members(&Vec::new()), [0u8; 0]);
+    }
+}

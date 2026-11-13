@@ -1,0 +1,17 @@
+error: Invalid field-level `venndb` attribute
+       A filter on this field needs a query method `execute`, which exists already: rename the field or use `#[venndb(skip)]`
+ --> tests/fails/method_execute.rs:6:5
+  |
+6 |     execute: String,
+  |     ^^^^^^^
+
+error[E0592]: duplicate definitions with name `execute`
+ --> tests/fails/method_execute.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^
+  |                 |
+  |                 duplicate definitions for `execute`
+  |                 other definition for `execute`
+  |
+  = note: this error originates in the derive macro `VennDB` (in Nightly builds, run with -Z macro-backtrace for more info)

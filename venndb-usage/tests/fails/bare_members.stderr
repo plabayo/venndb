@@ -1,0 +1,5 @@
+error: Expected name-value pair attribute, found path attribute
+ --> tests/fails/bare_members.rs:5:22
+  |
+5 |     #[venndb(filter, members)]
+  |                      ^^^^^^^
