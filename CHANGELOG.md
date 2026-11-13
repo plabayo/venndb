@@ -25,8 +25,8 @@ New Features:
 
 * [[`#17`](https://github.com/plabayo/venndb/issues/17)]: values of a filter map
   are stored as a list of rows as long as few rows have them, and as a bitmask only once many do.
-  A database of 1 000 000 rows with 16 000 distinct values is created in 0.2 seconds
-  instead of 61, and takes 66 MB instead of 3.1 GB;
+  A database of 100 000 rows with 16 000 distinct values is created in 18 milliseconds
+  instead of 5 seconds, and takes 6.5 MB instead of 330 MB;
 * `#[venndb(filter, set)]`: a property with multiple values, of which a row matches each.
   For `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`,
   or any other type using `#[venndb(filter, members = path)]`;

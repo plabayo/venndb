@@ -14,9 +14,7 @@ TITLES = OrderedDict(
         ("get_by_id", "look up by key"),
         ("pick/bools", "`tcp + socks5 + datacenter`"),
         ("pick/country", "`tcp + country`"),
-        ("pick/pool_country", "`tcp + !mobile + pool + country`"),
         ("pick/city", "`tcp + datacenter + country + city`"),
-        ("pick/asn", "`udp + !residential + asn`"),
         ("pick/countries", "`mobile + pool + 3 countries`"),
         ("pick/cities", "`tcp + 5 cities`"),
         ("pick_if/bools", "`tcp + socks5 + datacenter`, not blocked (closure)"),
@@ -58,6 +56,8 @@ SIZES = list(results.get("build", {}))
 
 def row(label, databases, column):
     cells = [databases.get(d, ["-", "-"])[column] for d in DATABASES]
+    if label == TITLES["build"]:
+        cells[-1] = "-"  # nothing to create for a list of rows
     print(f"| {label} | " + " | ".join(cells) + " |")
 
 
@@ -67,11 +67,6 @@ for size in SIZES:
     print("| - |" + " - |" * len(DATABASES))
     for bench, title in TITLES.items():
         row(title, results.get(bench, {}).get(size, {}), 0)
-
-print("\nPeak memory to create the database, rows not included:\n")
-print("| records | " + " | ".join(NAMES[:2]) + " |")
-print("| - | - | - |")
-for size in SIZES:
-    databases = results["build"][size]
-    cells = [databases.get(d, ["-", "-"])[1] for d in DATABASES[:2]]
-    print(f"| `{int(size):_}` | " + " | ".join(cells) + " |")
+    # sqlite allocates out of sight, a list of rows has no index
+    index = {d: v for d, v in results["build"][size].items() if d in DATABASES[:2]}
+    row("memory of the index, at its peak", index, 1)

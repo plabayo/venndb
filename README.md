@@ -124,106 +124,56 @@ to learn how to use the `VennDB` and its generated code.
 Benchmarks displayed here are taken on a dev machine with following specs:
 
 ```text
-Macbook Pro — 16 inch (2023)
-Chip: Apple M2 Pro
-Memory: 16 GB
-OS: Sonoma 14.2
+Macbook Pro — 16 inch (2024), OS: Tahoe 26.5
+Chip: Apple M4 Max, Memory: 64 GB
 ```
 
-The benchmarks tests 3 different implementations of a proxy database
+The benchmarks test 4 different implementations of a proxy database,
+shaped like the one of [`rama`](https://ramaproxy.org): 7 `bool` properties and 5 filter maps,
+of which the state, city and ASN have up to 1 000, 10 000 and 5 000 distinct values.
 
-- `venndb` version (very similar to [the example below](#example))
-- a `naive` version, which is just a `Vec<Proxy>`, over which is iterated
-- an `sqlite` version (using [the `sqlite` crate (version: `0.34.0`)](https://docs.rs/sqlite/0.34.0/sqlite/))
+- `venn`: the `venndb` version (very similar to [the example below](#example));
+- `roaring`: an index of [`roaring`](https://docs.rs/roaring/0.12.0/roaring/) bitmaps (version: `0.12.0`), written by hand;
+- `sqlite`: an in-memory table with an index per filter map (using [the `sqlite` crate (version: `0.37.4`)](https://docs.rs/sqlite/0.37.4/sqlite/));
+- `naive`: just a `Vec<Proxy>`, over which is iterated.
 
-The benchmarks are created by:
+Each query picks a random proxy among the matching ones, the numbers are the median time.
+The benchmarks are created by running `just bench-full | python3 scripts/bench_tables.py`.
 
-1. running `just bench`;
-2. copying the output into [./scripts/plot_bench_charts](./scripts/plot_bench_charts.py) and running it.
+Database with `100_000` records:
 
-Snippet that is ran for each 3 implementations:
+| | venn | roaring | sqlite | naive |
+| - | - | - | - | - |
+| create the database | 18.63 ms | 29.62 ms | 337.8 ms | - |
+| look up by key | 25.04 ns | 15.92 ns | 1.1 µs | 6.957 µs |
+| `tcp + socks5 + datacenter` | 968.1 ns | 1.611 µs | 4.1 ms | 641.4 µs |
+| `tcp + country` | 1.738 µs | 2.003 µs | 366.4 µs | 843.7 µs |
+| `tcp + datacenter + country + city` | 2.819 µs | 3.755 µs | 152.9 µs | 730.7 µs |
+| `mobile + pool + 3 countries` | 3.352 µs | 13.16 µs | 1.187 ms | 374.4 µs |
+| `tcp + 5 cities` | 2.475 µs | 5.671 µs | 386.8 µs | 1.036 ms |
+| `tcp + socks5 + datacenter`, not blocked (closure) | 1.077 µs | 132.6 µs | - | 684.6 µs |
+| `tcp + socks5 + datacenter`, not blocked (column) | 1.2 µs | - | - | - |
+| memory of the index, at its peak | 6.503 MB | 7.476 MB | - | - |
 
-```rust,ignore
-fn test_db(db: &impl ProxyDB) {
-    let i = next_round();
+Database with `1_000_000` records:
 
-    let pool = POOLS[i % POOLS.len()];
-    let country = COUNTRIES[i % COUNTRIES.len()];
-
-    let result = db.get(i as u64);
-    divan::black_box(result);
-
-    let result = db.any_tcp(pool, country);
-    divan::black_box(result);
-
-    let result = db.any_socks5_isp(pool, country);
-    divan::black_box(result);
-}
-```
-
-### Benchmark Performance Results
-
-Performance for Database with `100` records:
-
-| Proxy DB | Fastest | Slowest | Median |
-| --- | --- | --- | --- |
-| naive_proxy_db_100             | 1.276 µs      | 1.922 µs      | 1.328 µs |
-| sql_lite_proxy_db_100          | 22.96 µs      | 40.84 µs      | 26.52 µs |
-| venn_proxy_db_100              | 156.6 ns      | 243.8 ns      | 183.9 ns |
-
-Performance for Database with `12_500` records:
-
-| Proxy DB | Fastest | Slowest | Median |
-| --- | --- | --- | --- |
-| naive_proxy_db_12_500          | 202.7 µs      | 260 µs        | 217.1 µs      |
-| sql_lite_proxy_db_12_500       | 22 µs        | 903.4 µs      | 792.2 µs |
-| venn_proxy_db_12_500           | 1.767 µs      | 3.558 µs      | 2.1 µs  |
-
-Performance for Database with `100_000` records:
-
-| Proxy DB | Fastest | Slowest | Median |
-| --- | --- | --- | --- |
-| naive_proxy_db_100_000         | 2.196 ms      | 2.563 ms      | 2.288 ms |
-| sql_lite_proxy_db_100_000      | 5.85 ms       | 6.634 ms      | 6.223 ms |
-| venn_proxy_db_100_000          | 13.01 µs      | 30.47 µs      | 17.85 µs |
+| | venn | roaring | sqlite | naive |
+| - | - | - | - | - |
+| create the database | 183.5 ms | 419 ms | 3.74 s | - |
+| look up by key | 37.81 ns | 40.42 ns | 1.142 µs | 7.04 µs |
+| `tcp + socks5 + datacenter` | 11.2 µs | 13.86 µs | 42.12 ms | 6.819 ms |
+| `tcp + country` | 18.71 µs | 16.51 µs | 6.091 ms | 8.629 ms |
+| `tcp + datacenter + country + city` | 30.56 µs | 28.66 µs | 2.407 ms | 8.698 ms |
+| `mobile + pool + 3 countries` | 34.43 µs | 96.22 µs | 11.65 ms | 5.984 ms |
+| `tcp + 5 cities` | 20.57 µs | 49.52 µs | 6.261 ms | 10.17 ms |
+| `tcp + socks5 + datacenter`, not blocked (closure) | 11.78 µs | 3.423 ms | - | 7.078 ms |
+| `tcp + socks5 + datacenter`, not blocked (column) | 15.24 µs | - | - | - |
+| memory of the index, at its peak | 76.56 MB | 59.49 MB | - | - |
 
 We are not database nor hardware experts though. Please do open an issue if you think
 these benchmarks are incorrect or if related improvements can be made.
-Contributions in the form of Pull requests are welcomed as well.
-
-See [the Contribution guidelines](#contribution) for more information.
-
-### Benchmark Allocations Results
-
-Allocations for Database with `100` records:
-
-| Proxy DB | Fastest | Median | Slowest |
-| --- | --- | --- | --- |
-| naive_proxy_db_100             | 1.25 B      | 1.25 B        | 1.25 B |
-| sql_lite_proxy_db_100          | 1.378 KB    | 1.378 KB      | 1.378 KB |
-| venn_proxy_db_100              | 430 B       | 430 B         | 430 B |
-
-Allocations for Database with `12_500` records:
-
-| Proxy DB | Fastest | Median | Slowest |
-| --- | --- | --- | --- |
-| naive_proxy_db_12_500          | 40.73 KB    | 40.73 KB      | 40.73 KB |
-| sql_lite_proxy_db_12_500       | 5.149 KB    | 5.141 KB      | 5.144 KB |
-| venn_proxy_db_12_500           | 3.534 KB    | 3.534 KB      | 3.534 KB |
-
-Allocations for Database with `100_000` records:
-
-| Proxy DB | Fastest | Median | Slowest |
-| --- | --- | --- | --- |
-| naive_proxy_db_100_000         | 323.3 KB    | 323.3 KB      | 323.3 KB |
-| sql_lite_proxy_db_100_000      | 5.141 KB    | 5.147 KB      | 5.143 KB |
-| venn_proxy_db_100_000          | 25.4 KB     | 25.4 KB       | 25.4 KB |
-
-We are not database nor hardware experts though. Please do open an issue if you think
-these benchmarks are incorrect or if related improvements can be made.
-Contributions in the form of Pull requests are welcomed as well.
-
-See [the Contribution guidelines](#contribution) for more information.
+Contributions in the form of Pull requests are welcomed as well,
+see [the Contribution guidelines](#contribution) for more information.
 
 ## Q&A
 
@@ -319,17 +269,15 @@ pub struct Employee {
   skills: Vec<Skill>,
 }
 
-let mut query = db.query();
-// everyone with this skill, whatever their other skills
-query.skills(Skill::Rust);
-// or with a skill that looks like this: called once per distinct skill, not once per row
-query.skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }));
+// everyone with this skill, or with a skill for which the predicate,
+// called once per distinct skill and not once per row, returns true
+db.query().skills(Skill::Rust);
+db.query().skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }));
 ```
 
 It works for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and any type implementing `venndb::FilterSet`.
 For a type that is not yours use `#[venndb(filter, members = path)]`, with `path` a function
-returning an iterator over the values, e.g. `members = EnumSet::iter`.
-The `<property>_where` method is there for every "filter map" property.
+returning an iterator over the values. Every "filter map" property has a `<property>_where` method.
 
 > ❓ How can I filter on something that is not a property, or that changes?
 
@@ -342,10 +290,7 @@ let seniors = db.column(|employee| employee.years > 10);
 let on_leave = db.runtime_column();
 on_leave.set(db.index_by_id(&42).unwrap(), true);
 
-let mut query = db.query();
-query
-    .and(Filter::Is(&seniors))
-    .and(Filter::Runtime(&on_leave, false));
+db.query().and(Filter::Is(&seniors)).and(Filter::Runtime(&on_leave, false));
 ```
 
 Both only know about the rows the database had when they were created.

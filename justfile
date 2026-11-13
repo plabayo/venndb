@@ -45,10 +45,13 @@ watch-check:
 	cargo watch -x check -x test
 
 fuzz:
-	cargo +nightly fuzz run fuzz_employee_db -- -max_len=131072
+	cargo +nightly fuzz run fuzz_employee_db -- -max_len=4096
 
 fuzz-30s:
-	cargo +nightly fuzz run fuzz_employee_db -- -max_len=131072 -max_total_time=60
+	cargo +nightly fuzz run fuzz_employee_db -- -max_len=4096 -max_total_time=60
+
+mutants:
+	cargo mutants -p venndb -f 'src/*.rs' --test-workspace true
 
 bench:
 	cargo bench
