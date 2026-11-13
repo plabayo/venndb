@@ -118,6 +118,10 @@ name = "fleet"
 required-features = ["derive"]
 
 [[example]]
+name = "runtime"
+required-features = ["derive"]
+
+[[example]]
 name = "sets"
 required-features = ["derive"]
 

@@ -293,7 +293,8 @@ on_leave.set(db.index_by_id(&35).unwrap(), true);
 query.is_manager(true).and(Filter::Is(&seniors)).and(Filter::Runtime(&on_leave, false));
 ```
 
-Both only know about the rows the database had when they were created.
+Both only know about the rows the database had when they were created,
+see [the `runtime` example](./examples/runtime.rs) for what that means when rows are added or the database is replaced.
 For a condition that fits no column there is `EmployeeDBQueryResult::any_where(predicate)`.
 
 > ❓ How can I provide custom validation of rows prior to them getting appended?

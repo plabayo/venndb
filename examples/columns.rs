@@ -1,6 +1,7 @@
 //! Filters on what is no property of a row, or changes while the database is in use.
 //!
-//! Run with `cargo run --example columns`.
+//! Run with `cargo run --example columns`, and see the `runtime` example
+//! for more on the columns that change.
 
 use venndb::{Filter, VennDB};
 
