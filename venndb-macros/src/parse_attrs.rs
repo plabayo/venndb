@@ -12,7 +12,7 @@ pub struct FieldAttrs<'a> {
 pub enum FieldKind {
     /// A unique key, optionally computed from the row by a function.
     Key {
-        with: Option<syn::Path>,
+        with: Option<syn::ExprPath>,
     },
     Filter,
     FilterMap {
