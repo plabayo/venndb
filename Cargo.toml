@@ -86,6 +86,11 @@ single_match_else = "warn"
 trivially_copy_pass_by_ref = "warn"
 use_self = "warn"
 
+[features]
+default = ["derive"]
+derive = ["dep:venndb-macros"]
+bench-full = []
+
 [dependencies]
 foldhash = { workspace = true }
 venndb-macros = { workspace = true, optional = true }
@@ -96,11 +101,6 @@ itertools = { workspace = true }
 rand = { workspace = true }
 roaring = { workspace = true }
 sqlite = { workspace = true }
-
-[features]
-default = ["derive"]
-derive = ["dep:venndb-macros"]
-bench-full = []
 
 [lints]
 workspace = true
