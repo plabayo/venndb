@@ -12,7 +12,7 @@ thread_local! {
 ///
 /// Uniform enough to pick a row, not fit for cryptography.
 #[must_use]
-pub fn below(limit: usize) -> usize {
+pub(crate) fn below(limit: usize) -> usize {
     let random = STATE.with(|state| {
         // xorshift64*
         let mut x = state.get();

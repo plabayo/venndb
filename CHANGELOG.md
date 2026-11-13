@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# 0.7.0 (2026-11-13)
+
+A new engine, with the same API on top of it.
+
+Breaking Changes:
+
+* Bump MSRV to 1.96;
+* `venndb::__internal` is gone, the types a database is made of are now public:
+  `RowSet`, `KeyIndex`, `BoolColumn`, `ValueColumn`, `Plan`, `Filter`, `Matches` and `RuntimeColumn`;
+* `<DB>QueryResult::iter` returns `impl Iterator`, the `<DB>QueryResultIter` types are gone;
+* A database holds at most `u32::MAX` rows;
+* Querying a filter map on a value no row has, next to values that do have rows,
+  now returns the rows of the latter instead of nothing.
+
+New Features:
+
+* [[`#17`](https://github.com/plabayo/venndb/issues/17)]: values of a filter map
+  are stored as a list of rows as long as few rows have them, and as a bitmask only once many do.
+  A database of 1 000 000 rows with 16 000 distinct values is created in 0.2 seconds
+  instead of 61, and takes 66 MB instead of 3.1 GB;
+* `#[venndb(filter, set)]`: a property with multiple values, of which a row matches each.
+  For `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`,
+  or any other type using `#[venndb(filter, members = path)]`;
+* `<DB>Query::<property>_where(predicate)`: filter on what the values of a property look like,
+  the predicate is called once per distinct value;
+* [[`#16`](https://github.com/plabayo/venndb/issues/16)]: `<DB>::column(predicate)` and
+  `<DB>::runtime_column()` create columns that are no property of a row, the latter can be
+  changed at any time and from any thread. Add them to a query with `<DB>Query::and`;
+* `<DB>QueryResult::any_where(predicate)` and `<DB>QueryResult::len()`;
+* `#[venndb(filter, any = path)]`: decide what a wildcard is with a function instead of `venndb::Any`;
+* [[`#21`](https://github.com/plabayo/venndb/issues/21)]: `#[venndb(key = path)]`:
+  a key computed from the row by a function;
+* `<DB>::index_by_<key>`, `<DB>::get` and `<DB>::shrink_to_fit`;
+* The `derive` feature, enabled by default, to use the engine without the macro.
+
+Other Changes:
+
+* No dependencies left: `hashbrown` and `rand` are replaced by the standard library;
+* Queries count and pick rows a machine word at a time, and start from the smallest set of rows;
+* Benchmarks are rewritten around a database shaped like the one of `rama`,
+  and compared with `roaring` and an indexed `sqlite`;
+* The fuzzer compares queries with a scan of the rows.
+
 # 0.6.1 (2025-11-18)
 
 Other Changes:

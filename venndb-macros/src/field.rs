@@ -31,7 +31,7 @@ pub struct KeyField<'a> {
     pub name: &'a Ident,
     pub ty: &'a syn::Type,
     /// The function computing the key from the row, if not the field itself.
-    pub with: Option<&'a syn::Path>,
+    pub with: Option<&'a syn::ExprPath>,
 }
 
 impl KeyField<'_> {

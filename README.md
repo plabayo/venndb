@@ -5,7 +5,7 @@ This database is designed for a very specific use case where you have mostly sta
 like these can be large and should be both fast and compact.
 
 For the limited usecases where `venndb` can be applied to,
-it has less dependencies and is faster then traditional choices,
+it has no dependencies and is faster then traditional choices,
 such as a naive implementation or a more heavy lifted dependency such as _Sqlite_.
 
 > See [the benchmarks](#benchmarks) for more information on this topic.
@@ -241,7 +241,7 @@ Alternatively you can also [join our Discord][discord-url] and start a conversat
 
 > ❓ Can I use _whatever_ type for a `#[venndb(filter)]` property?
 
-Yes, as long as it implements `PartialEq + Eq + Hash + Clone`.
+Yes, as long as it implements `Eq + Hash + Clone`.
 That said, we do recommend that you use `enum` values if you can, or some other highly restricted form.
 
 Using for example a `String` directly is a bad idea as that would mean that `bE` != `Be` != `BE` != `Belgium` != `Belgique` != `België`. Even though these are really referring all to the same country. In such cases a much better idea is to at the very least create a wrapper type such as `struct Country(String)`, to allow you to enforce sanitization/validation when creating the value and ensuring the hashes will be the same for those values that are conceptually the same.
@@ -303,6 +303,53 @@ let mut query = db.query();
 let hr_employees: Vec<_> = query.department(Department::Hr).execute().unwrap().iter().collect();
 assert_eq!(hr_employees.len(), 2);
 ```
+
+For a type that is not yours you can point to a function instead of implementing `Any`:
+`#[venndb(filter, any = Department::is_any)]`.
+
+> ❓ How can a property have multiple values?
+
+Mark the filter as a `set`. A row then matches each of the values in it:
+
+```rust,ignore
+#[derive(Debug, VennDB)]
+pub struct Employee {
+  name: String,
+  #[venndb(filter, set)]
+  skills: Vec<Skill>,
+}
+
+let mut query = db.query();
+// everyone with this skill, whatever their other skills
+query.skills(Skill::Rust);
+// or with a skill that looks like this: called once per distinct skill, not once per row
+query.skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }));
+```
+
+It works for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and any type implementing `venndb::FilterSet`.
+For a type that is not yours use `#[venndb(filter, members = path)]`, with `path` a function
+returning an iterator over the values, e.g. `members = EnumSet::iter`.
+The `<property>_where` method is there for every "filter map" property.
+
+> ❓ How can I filter on something that is not a property, or that changes?
+
+Create a column for it and add it to the query:
+
+```rust,ignore
+// computed once, for a fact about a row that is no property
+let seniors = db.column(|employee| employee.years > 10);
+// set and unset at any time and from any thread, without a lock
+let on_leave = db.runtime_column();
+on_leave.set(db.index_by_id(&42).unwrap(), true);
+
+let mut query = db.query();
+query
+    .and(Filter::Is(&seniors))
+    .and(Filter::Runtime(&on_leave, false));
+```
+
+Both only know about the rows the database had when they were created.
+For a condition that fits no column there is `EmployeeDBQueryResult::any_where(predicate)`.
 
 > ❓ How can I provide custom validation of rows prior to them getting appended?
 
@@ -764,14 +811,13 @@ The following public-API datastructures will be generated:
 - `enum EmployeeInMemDBErrorKind`: the kind of error that can happen as described for `EmployeeInMemDBError`;
 - `struct EmployeeInMemDBQuery`: the query builder that is used to build a query that can be `execute`d to query data from the db using filters;
 - `struct EmployeeInMemDBQueryResult`: the result when querying using `EmployeeInMemDBQuery` and at least one row was found that matched the defined filters;
-- `struct EmployeeInMemDBQueryResultIter`: the iterator type that is used when calling `EmployeeInMemDBQueryResult::iter`. It has no methods/api other then the fact that it is an `Iterator` and can be used as one;
 
 The visual specifiers of these datastructures will be the same as the `struct` that the `VennDB` macro is applied to.
 E.g. in this example `Employee` has a specifier of `pub` so the above datastructures and their public-apy methods will also be `pub`.
 
-There are also some other helper datastructures generated — all prefixed with the database name, e.g. `EmployeeInMemDB` in this example —
-but we do not mention here as they should not be relied upon and given the prefix it should cause no conflict.
-In case you do not want to expose these structures to the outside you can wrap your `struct` within its own `mod` (module).
+These are built from the types found in `venndb` itself, such as `RowSet`, `ValueColumn` and `Plan`,
+which you can also use directly, without the macro (`default-features = false`).
+In case you do not want to expose the generated structures to the outside you can wrap your `struct` within its own `mod` (module).
 
 #### Generated Code Summary: Method API
 
@@ -781,12 +827,16 @@ Database: (e.g. `EmployeeInMemDB`):
 | - | - |
 | `EmployeeInMemDB::new() -> EmployeeInMemDB` | create a new database with zero capacity |
 | `EmployeeInMemDB::default() -> EmployeeInMemDB` | same as `EmployeeInMemDB::new() -> EmployeeInMemDB` |
-| `EmployeeInMemDB::capacity(capacity: usize) -> EmployeeInMemDB` | create a new database with the given capacity, but no rows already inserted |
+| `EmployeeInMemDB::with_capacity(capacity: usize) -> EmployeeInMemDB` | create a new database with the given capacity, but no rows already inserted |
 | `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(rows: ::std::vec::Vec<Employee>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | constructor to create the database directly from a heap-allocated list of data instances. The second version is the one used if at least one `#[venndb(key)]` property is defined, otherwise it is the first one (without the `Result`). |
 | `EmployeeInMemDB::from_iter(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> EmployeeInMemDB` or `EmployeeInMemDB::from_rows(iter: impl ::std::iter::IntoIterator<Item = impl ::std::convert::Into<Employee>>) -> Result<EmployeeInMemDB, EmployeeInMemDBError<::std::vec::Vec<Employee>>>` | Same as `from_rows` but using an iterator instead. The items do not have to be an `Employee` but can be anything that can be turned into one. E.g. in our example above we defined a struct `RawCsvRow` that was turned on the fly into an `Employee`. This happens all at once prior to inserting the database, which is why the version with a result does return a `Vec` and not an iterator. |
 | `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>)` or `EmployeeInMemDB::append(&mut self, data: impl ::std::convert::Into<Employee>) -> Result<(), EmployeeInMemDBError<Employee>>` | append a single row to the database. Depending on whether or not a `#[venndb(key)]` property is defined it will generate the `Result` version or not. Same as `from_rows` and `from_iter` |
 | `EmployeeInMemDB::extend<I, Item>(&mut self, iter: I) where I: ::std::iter::IntoIterator<Item = Item>, Item: ::std::convert::Into<Employee>` or `EmployeeInMemDB::extend<I, Item>(&mut self, iter: I) -> Result<(), EmployeeInMemDBError<(Employee, I::IntoIter)>> where I: ::std::iter::IntoIterator<Item = Item>, Item: ::std::convert::Into<Employee>` | extend the database with the given iterator, once again returning a result in case such insertion can go wrong (e.g. because keys are used (duplication) or a row is invalid in case a validator is defined). Otherwise this function will return nothing. |
 | `EmployeeInMemDB::get_by_id<Q>(&self, data: impl ::std::convert::Into<Employee>) -> Option<&Employee> where Employee ::std::borrow::Borrow<Q>, Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized` | look up a row by the `id` key property. This method will be generated for each property marked with `#[venndb(key)`. e.g. if you have key property named `foo: MyType` property there will be also a `get_by_foo(&self, ...)` method generated. |
+| `EmployeeInMemDB::index_by_id<Q>(&self, key: &Q) -> Option<usize>` and `EmployeeInMemDB::get(&self, index: usize) -> Option<&Employee>` | the row index for a key, as used by columns, and the row for an index. |
+| `EmployeeInMemDB::column(&self, predicate: impl FnMut(&Employee) -> bool) -> venndb::RowSet` | the rows matching the predicate, to add to a query with `Filter::Is` or `Filter::Not`. |
+| `EmployeeInMemDB::runtime_column(&self) -> venndb::RuntimeColumn` | a column of which rows can be set at any time, to add to a query with `Filter::Runtime`. |
+| `EmployeeInMemDB::shrink_to_fit(&mut self)` | release the memory that is not needed, done for you by `from_rows` and `from_iter`. |
 | `EmployeeInMemDB::query(&self) -> EmployeeInMemDBQuery` | create a `EmployeeInMemDBQuery` builder to compose a filter composition to query the database. The default builder will match all rows. See the method API for `EmployeeInMemDBQuery` for more information |
 
 Query (e.g. `EmployeeInMemDBQuery`)
@@ -798,14 +848,19 @@ Query (e.g. `EmployeeInMemDBQuery`)
 | `EmployeeInMemDBQuery::is_manager(&mut self, value: bool) -> &mut Self` | a filter setter for a `bool` filter. One such method per `bool` filter (that isn't `skip`ped) will be available. E.g. if you have ` foo` filter then there will be a `EmployeeInMemDBQuery:foo` method. For _bool_ filters that are optional (`Option<bool>`) this method is also generated just the same. |
 | `EmployeeInMemDBQuery::department(&mut self, value: impl ::std::convert::Into<Department>) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. Filter maps that have a `Option<T>` type have exactly the same signature. Duering query you can call this method multiple times in case you wish to allow multiple variants. |
 
+| `EmployeeInMemDBQuery::department_where(&mut self, predicate: impl FnMut(&Department) -> bool) -> &mut Self` | filter on the values for which the predicate returns `true`. Called once per distinct value, not once per row. One such method per non-`bool` filter. |
+| `EmployeeInMemDBQuery::and(&mut self, filter: venndb::Filter<'a>) -> &mut Self` | add a filter on a column created with `column` or `runtime_column`. |
+
 Query Result (e.g. `EmployeeInMemDBQueryResult`)
 
 | fn signature | description |
 | - | - |
 | `EmployeeInMemDBQueryResult::first(&self) -> &Employee` | return a reference to the first matched employee found. An implementation detail is that this will be the matched row that was first inserted, but for compatibility reasons you best not rely on this if you do not have to. |
 | `EmployeeInMemDBQueryResult::any(&self) -> &Employee` | return a reference to a randomly selected matched employee. The randomness can be relied upon to be fair.  |
-| `EmployeeInMemDBQueryResult::iter(&self) -> `EmployeeInMemDBQueryResultIter` | return an iterator for the query result, which will allow you to iterate over all found results, and as such also collect them into an owned data structure should you wish. |
-| `EmployeeInMemDBQueryResult::filter<F>(&self, predicate: F) -> Option<#EmployeeInMemDBQueryResult> where F: Fn(&#name) -> bool` | return `Some(_)` `EmployeeInMemDBQueryResult` with the same reference data, but containing (and owning) only the indexes for which the linked row matches arcoding to the given `Fn` predicate |
+| `EmployeeInMemDBQueryResult::len(&self) -> usize` | the number of matched employees, never zero. |
+| `EmployeeInMemDBQueryResult::any_where(&self, predicate: impl FnMut(&Employee) -> bool) -> Option<&Employee>` | return a randomly selected matched employee for which the predicate returns `true`. Tries a few random ones before testing them all. |
+| `EmployeeInMemDBQueryResult::iter(&self) -> impl Iterator<Item = &Employee>` | return an iterator for the query result, which will allow you to iterate over all found results, and as such also collect them into an owned data structure should you wish. |
+| `EmployeeInMemDBQueryResult::filter(&self, predicate: impl FnMut(&Employee) -> bool) -> Option<EmployeeInMemDBQueryResult>` | return `Some(_)` `EmployeeInMemDBQueryResult` with the same reference data, but containing (and owning) only the indexes for which the linked row matches arcoding to the given `Fn` predicate |
 
 ## ⛨ | Safety
 

@@ -27,7 +27,7 @@ pub enum By {
     /// By the trait made for it.
     Trait,
     /// By the function at this path.
-    Path(syn::Path),
+    Path(syn::ExprPath),
 }
 
 impl<'a> FieldAttrs<'a> {
@@ -35,7 +35,7 @@ impl<'a> FieldAttrs<'a> {
         let mut this = Self::default();
 
         let mut skipped = false;
-        let mut key: Option<Option<syn::Path>> = None;
+        let mut key: Option<Option<syn::ExprPath>> = None;
         let mut is_filter = false;
         let mut any: Option<By> = None;
         let mut set: Option<By> = None;
@@ -212,13 +212,18 @@ impl<'a> FieldAttrs<'a> {
 }
 
 /// The path of a `name = path` attribute, `None` for just `name`.
-fn path_value(errors: &Errors, meta: &syn::Meta) -> Option<syn::Path> {
-    match meta {
-        syn::Meta::Path(_) => None,
-        _ => errors
-            .expect_meta_name_value(meta)
-            .and_then(|m| errors.expect_path(&m.value))
-            .cloned(),
+///
+/// Kept as an expression, as a path such as `<[T]>::iter` starts with a type.
+fn path_value(errors: &Errors, meta: &syn::Meta) -> Option<syn::ExprPath> {
+    if let syn::Meta::Path(_) = meta {
+        return None;
+    }
+    match &errors.expect_meta_name_value(meta)?.value {
+        syn::Expr::Path(path) => Some(path.clone()),
+        value => {
+            errors.expect_path(value);
+            None
+        }
     }
 }
 

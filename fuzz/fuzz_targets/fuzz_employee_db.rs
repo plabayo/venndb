@@ -63,8 +63,12 @@ impl Query {
             && (self.factions.is_empty() || self.factions.contains(&row.faction))
             && (self.planets.is_empty() || self.planets.iter().any(planet))
             && (self.ranks.is_empty() || self.ranks.iter().any(|r| row.ranks.contains(r)))
-            && self.rank_below.is_none_or(|below| row.ranks.iter().any(|r| *r < below))
-            && self.busy.is_none_or(|value| busy.get(index).copied().unwrap_or(false) == value)
+            && self
+                .rank_below
+                .is_none_or(|below| row.ranks.iter().any(|r| *r < below))
+            && self
+                .busy
+                .is_none_or(|value| busy.get(index).copied().unwrap_or(false) == value)
             && self.odd.is_none_or(|odd| (row.id % 2 == 1) == odd)
     }
 }
