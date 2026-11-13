@@ -58,7 +58,7 @@ New Features:
 Example:
 
 ```rust
-use venndb::{Filter, VennDB};
+use venndb::{Filter, RuntimeColumn, VennDB};
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -79,7 +79,7 @@ query
     .skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }))
     .country("BE")
     .and(Filter::Runtime(&on_leave, false));
-let employee = query.execute().unwrap().any();
+let employee = query.any();
 ```
 
 Other Changes:
