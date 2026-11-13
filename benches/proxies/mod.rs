@@ -1,7 +1,8 @@
 //! A proxy database shaped like the one of `rama`, implemented four ways.
 
+/// The same hash map as `venndb` uses.
+type HashMap<K, V> = std::collections::HashMap<K, V, foldhash::fast::RandomState>;
 use roaring::RoaringBitmap;
-use std::collections::HashMap;
 use venndb::{Any, VennDB};
 
 #[derive(Debug, Clone, VennDB)]
@@ -451,7 +452,7 @@ impl RoaringProxyDB {
 impl ProxyDB for RoaringProxyDB {
     fn create(rows: Vec<Proxy>) -> Self {
         let mut db = Self {
-            ids: HashMap::with_capacity(rows.len()),
+            ids: HashMap::with_capacity_and_hasher(rows.len(), Default::default()),
             bools: Default::default(),
             labels: Default::default(),
             any: Default::default(),

@@ -5,7 +5,7 @@ This database is designed for a very specific use case where you have mostly sta
 like these can be large and should be both fast and compact.
 
 For the limited usecases where `venndb` can be applied to,
-it has no runtime dependencies and is faster then traditional choices,
+it has next to no dependencies and is faster then traditional choices,
 such as a naive implementation or a more heavy lifted dependency such as _Sqlite_.
 
 > See [the benchmarks](#benchmarks) for more information on this topic.
@@ -144,30 +144,30 @@ Database with `100_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database | 17.52 ms | 30.07 ms | 338.1 ms | - |
-| look up by key | 13.87 ns | 24.77 ns | 1.098 µs | 6.874 µs |
-| `tcp + socks5 + datacenter` | 1.076 µs | 1.569 µs | 4.101 ms | 653.1 µs |
-| `tcp + country` | 1.633 µs | 2.066 µs | 372.9 µs | 850 µs |
-| `tcp + datacenter + country + city` | 2.443 µs | 3.712 µs | 154.2 µs | 731 µs |
-| `mobile + pool + 3 countries` | 2.851 µs | 12.87 µs | 1.036 ms | 345.7 µs |
-| `tcp + 5 cities` | 2.348 µs | 6.917 µs | 368.9 µs | 1.051 ms |
-| `tcp + socks5 + datacenter`, not blocked (closure) | 1.056 µs | 132.4 µs | - | 682.9 µs |
-| `tcp + socks5 + datacenter`, not blocked (column) | 1.366 µs | - | - | - |
+| create the database | 12.22 ms | 25.67 ms | 339.4 ms | - |
+| look up by key | 8.487 ns | 11.17 ns | 1.102 µs | 6.582 µs |
+| `tcp + socks5 + datacenter` | 994.8 ns | 1.529 µs | 4.113 ms | 646.1 µs |
+| `tcp + country` | 1.572 µs | 2.047 µs | 363 µs | 769.1 µs |
+| `tcp + datacenter + country + city` | 2.862 µs | 3.884 µs | 156.6 µs | 706.4 µs |
+| `mobile + pool + 3 countries` | 3.189 µs | 11.35 µs | 1.349 ms | 374 µs |
+| `tcp + 5 cities` | 2.144 µs | 5.967 µs | 365.5 µs | 1.027 ms |
+| `tcp + socks5 + datacenter`, not blocked (closure) | 994.8 ns | 132.7 µs | - | 672.4 µs |
+| `tcp + socks5 + datacenter`, not blocked (column) | 1.367 µs | - | - | - |
 | memory of the index, at its peak | 6.483 MB | 7.476 MB | - | - |
 
 Database with `1_000_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database | 170.3 ms | 416.9 ms | 3.772 s | - |
-| look up by key | 36.17 ns | 43 ns | 1.14 µs | 7.083 µs |
-| `tcp + socks5 + datacenter` | 11.97 µs | 13.85 µs | 41.78 ms | 6.889 ms |
-| `tcp + country` | 15 µs | 16.69 µs | 6.5 ms | 8.405 ms |
-| `tcp + datacenter + country + city` | 22.56 µs | 29.14 µs | 1.866 ms | 8.343 ms |
-| `mobile + pool + 3 countries` | 30.43 µs | 96.1 µs | 11.67 ms | 5.57 ms |
-| `tcp + 5 cities` | 19.51 µs | 52.83 µs | 6.617 ms | 10.19 ms |
-| `tcp + socks5 + datacenter`, not blocked (closure) | 11.93 µs | 3.457 ms | - | 7.252 ms |
-| `tcp + socks5 + datacenter`, not blocked (column) | 15.84 µs | - | - | - |
+| create the database | 111.9 ms | 345.8 ms | 3.753 s | - |
+| look up by key | 14.3 ns | 20.77 ns | 1.144 µs | 6.874 µs |
+| `tcp + socks5 + datacenter` | 11.7 µs | 13.7 µs | 41.89 ms | 6.733 ms |
+| `tcp + country` | 14.94 µs | 17.99 µs | 6.693 ms | 8.616 ms |
+| `tcp + datacenter + country + city` | 26.46 µs | 31.08 µs | 2.296 ms | 8.609 ms |
+| `mobile + pool + 3 countries` | 29.66 µs | 106.2 µs | 11.83 ms | 5.194 ms |
+| `tcp + 5 cities` | 18.39 µs | 51.72 µs | 6.456 ms | 10.21 ms |
+| `tcp + socks5 + datacenter`, not blocked (closure) | 11.14 µs | 3.45 ms | - | 7.278 ms |
+| `tcp + socks5 + datacenter`, not blocked (column) | 15.05 µs | - | - | - |
 | memory of the index, at its peak | 61.79 MB | 59.49 MB | - | - |
 
 We are not database nor hardware experts though. Please do open an issue if you think

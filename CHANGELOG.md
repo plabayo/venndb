@@ -25,7 +25,7 @@ New Features:
 
 * [[`#17`](https://github.com/plabayo/venndb/issues/17)]: values of a filter map
   are stored as a list of rows as long as few rows have them, and as a bitmask only once many do.
-  A database of 100 000 rows with 16 000 distinct values is created in 18 milliseconds
+  A database of 100 000 rows with 16 000 distinct values is created in 12 milliseconds
   instead of 5 seconds, and takes 6.5 MB instead of 330 MB;
 * `#[venndb(filter, set)]`: a property with multiple values, of which a row matches each.
   For `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`,
@@ -44,7 +44,8 @@ New Features:
 
 Other Changes:
 
-* No runtime dependencies left: `hashbrown` and `rand` are replaced by the standard library;
+* `hashbrown` and `rand` are replaced by the standard library, with `foldhash`
+  as the hash function: the one dependency left next to the macro;
 * Queries count and pick rows a machine word at a time, and start from the smallest set of rows;
 * Benchmarks are rewritten around a database shaped like the one of `rama`,
   and compared with `roaring` and an indexed `sqlite`;

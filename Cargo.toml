@@ -20,6 +20,7 @@ members = [".", "fuzz", "venndb-macros", "venndb-usage"]
 
 [workspace.dependencies]
 divan = "0.1.21"
+foldhash = "0.2.0"
 itertools = "0.15.0"
 proc-macro2 = "1.0"
 quote = "1.0"
@@ -86,6 +87,7 @@ trivially_copy_pass_by_ref = "warn"
 use_self = "warn"
 
 [dependencies]
+foldhash = { workspace = true }
 venndb-macros = { workspace = true, optional = true }
 
 [dev-dependencies]

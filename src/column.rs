@@ -3,13 +3,15 @@
 use crate::plan::{Filter, Plan};
 use crate::rowset::RowSet;
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
 /// The wildcard rows are part of every query on their column,
 /// which makes them worth a bitmask long before other rows are.
 const ANY_DENSE_RATIO: usize = 1024;
+
+/// The hash map of the standard library, with a faster hash function.
+type HashMap<K, V> = std::collections::HashMap<K, V, foldhash::fast::RandomState>;
 
 /// The rows of a unique key.
 #[derive(Debug, Clone)]
@@ -20,7 +22,7 @@ pub struct KeyIndex<K> {
 impl<K> Default for KeyIndex<K> {
     fn default() -> Self {
         Self {
-            rows: HashMap::new(),
+            rows: HashMap::default(),
         }
     }
 }
@@ -36,7 +38,7 @@ impl<K: Hash + Eq> KeyIndex<K> {
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            rows: HashMap::with_capacity(capacity),
+            rows: HashMap::with_capacity_and_hasher(capacity, Default::default()),
         }
     }
 
@@ -159,7 +161,7 @@ pub struct ValueColumn<T> {
 impl<T> Default for ValueColumn<T> {
     fn default() -> Self {
         Self {
-            slots: HashMap::new(),
+            slots: HashMap::default(),
             rows: Vec::new(),
             any: RowSet::new(),
         }
