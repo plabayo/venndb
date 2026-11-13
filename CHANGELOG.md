@@ -33,7 +33,7 @@ New Features:
   * a database of 100 000 rows with 16 000 distinct values is created in 12 milliseconds
     instead of 5 seconds, and takes 6.5 MB instead of 330 MB;
 * support properties with multiple values, of which a row matches each: `#[venndb(filter, set)]`;
-  * for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`;
+  * for `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`;
   * or any other type using `#[venndb(filter, members = path)]`;
 * support filtering on what the values of a property look like: `<DB>Query::<property>_where(predicate)`;
   * the predicate is called once per distinct value, not once per row;
@@ -44,6 +44,7 @@ New Features:
   * add them to a query with `<DB>Query::and`;
 * [[`#21`](https://github.com/plabayo/venndb/issues/21)]: support keys computed from the row by a function: `#[venndb(key = path)]`;
 * support wildcards decided by a function instead of `venndb::Any`: `#[venndb(filter, any = path)]`;
+* add `#[derive(Any)]` to implement `venndb::Any` for an enum, with `#[any]` on the variants that match any value;
 * add `<DB>QueryResult::any_where(predicate)` and `<DB>QueryResult::len()`;
 * add `<DB>::index_by_<key>`, `<DB>::get` and `<DB>::shrink_to_fit`;
 * add the `derive` feature, enabled by default, to be able to use the engine without the macro.
@@ -58,7 +59,7 @@ pub struct Employee {
     #[venndb(key)]
     id: u32,
     #[venndb(filter, set)]
-    skills: Vec<Skill>,
+    skills: HashSet<Skill>,
     #[venndb(filter, any = Country::is_any)]
     country: Country,
 }

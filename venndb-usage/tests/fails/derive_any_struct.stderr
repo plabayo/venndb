@@ -1,0 +1,5 @@
+error: `#[derive(Any)]` can only be applied to enums, implement `venndb::Any` for other types
+ --> tests/fails/derive_any_struct.rs:4:8
+  |
+4 | struct Department(String);
+  |        ^^^^^^^^^^

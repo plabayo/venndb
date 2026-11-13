@@ -227,17 +227,12 @@ Usage:
 ```rust,ignore
 use venndb::{Any, VennDB};
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Any)]
 pub enum Department {
+  #[any]
   Any,
   Hr,
   Engineering,
-}
-
-impl Any for Department {
-  fn is_any(&self) -> bool {
-    self == &Self::Any
-  }
 }
 
 #[derive(Debug, VennDB)]
@@ -258,8 +253,8 @@ let hr_employees: Vec<_> = query.department(Department::Hr).execute().unwrap().i
 assert_eq!(hr_employees.len(), 2);
 ```
 
-For a type that is not yours you can point to a function instead of implementing `Any`:
-`#[venndb(filter, any = is_any)]`.
+For a type that is no enum you implement `venndb::Any` yourself, and for a type that is not yours
+you can point to a function instead: `#[venndb(filter, any = is_any)]`.
 
 > ❓ How can a property have multiple values?
 
@@ -270,7 +265,7 @@ Mark the filter as a `set`. A row then matches each of the values in it:
 pub struct Employee {
   name: String,
   #[venndb(filter, set)]
-  skills: Vec<Skill>,
+  skills: HashSet<Skill>,
 }
 
 // everyone with this skill, or with a skill for which the predicate,
@@ -279,7 +274,7 @@ query.skills(Skill::Rust);
 query.skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }));
 ```
 
-It works for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and any type implementing `venndb::FilterSet`.
+It works for `HashSet`, `BTreeSet` and any type implementing `venndb::FilterSet`, not for lists such as `Vec`.
 For a type that is not yours use `#[venndb(filter, members = path)]`, with `path` a function
 returning an iterator over the values, and `item = "Type"` if the type of those cannot be told from
 the property. Every "filter map" property has a `<property>_where` method, rows with an _any_ value always match it.

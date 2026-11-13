@@ -1,0 +1,5 @@
+error: `#[derive(Any)]` needs a variant marked with `#[any]`
+ --> tests/fails/derive_any_without_any.rs:4:6
+  |
+4 | enum Department {
+  |      ^^^^^^^^^^

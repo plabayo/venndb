@@ -1451,7 +1451,7 @@ mod tests_v0_7 {
 
     /// A set type of our own.
     #[derive(Debug, Default)]
-    pub struct Tags(Vec<&'static str>);
+    pub struct Tags(BTreeSet<&'static str>);
 
     impl FilterSet for Tags {
         type Item = &'static str;
@@ -1487,7 +1487,7 @@ mod tests_v0_7 {
         team: &'static str,
         remote: bool,
         #[venndb(filter, set)]
-        skills: Vec<Skill>,
+        skills: BTreeSet<Skill>,
         #[venndb(filter, set)]
         tags: Tags,
         #[venndb(filter, set)]
@@ -1508,8 +1508,12 @@ mod tests_v0_7 {
             badge: String::new(),
             team,
             remote: id.is_multiple_of(2),
-            skills: skills.to_vec(),
-            tags: Tags(if id < 3 { vec!["early", team] } else { vec![] }),
+            skills: skills.iter().cloned().collect(),
+            tags: Tags(if id < 3 {
+                ["early", team].into()
+            } else {
+                BTreeSet::new()
+            }),
             floors: (id != 2).then(|| [id as u8, 9].into()),
             projects: [id as u16 * 10, 7].into(),
             languages: id as u8,
@@ -1768,6 +1772,52 @@ mod tests_v0_7 {
     }
 
     #[test]
+    fn test_derive_any() {
+        use venndb::Any;
+
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, Any)]
+        enum Place<T> {
+            #[any]
+            Anywhere,
+            #[any]
+            Near {
+                _km: u8,
+            },
+            City(T),
+            #[any]
+            Region(T, T),
+        }
+
+        assert!(Place::<u8>::Anywhere.is_any());
+        assert!(Place::<u8>::Near { _km: 3 }.is_any());
+        assert!(Place::Region(1, 2).is_any());
+        assert!(!Place::City(1).is_any());
+
+        #[derive(Debug, VennDB)]
+        struct Shop {
+            #[venndb(filter, any)]
+            place: Place<&'static str>,
+        }
+
+        let db = ShopDB::from_rows(vec![
+            Shop {
+                place: Place::City("ghent"),
+            },
+            Shop {
+                place: Place::Anywhere,
+            },
+            Shop {
+                place: Place::City("paris"),
+            },
+        ]);
+        let mut query = db.query();
+        query.place(Place::City("ghent"));
+        assert_eq!(query.execute().unwrap().len(), 2);
+        query.reset().place(Place::Near { _km: 1 });
+        assert_eq!(query.execute().unwrap().len(), 1);
+    }
+
+    #[test]
     fn test_unknown_value_next_to_known() {
         let db = db();
         let mut query = db.query();
@@ -1786,7 +1836,7 @@ mod tests_v0_7 {
             #[venndb(filter)]
             bucket: u32,
             #[venndb(filter, set)]
-            divisors: Vec<u32>,
+            divisors: BTreeSet<u32>,
         }
 
         let rows = 20_000u32;

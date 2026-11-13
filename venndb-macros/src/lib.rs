@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod any;
 mod errors;
 mod field;
 mod generate_db;
@@ -22,6 +23,24 @@ pub fn venndb(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
     let ts: TokenStream = impl_from_args(&ast);
     ts.into()
+}
+
+/// Derive macro implementing `venndb::Any` for an enum:
+/// the variants marked with `#[any]` are the ones that match any value.
+///
+/// ```ignore
+/// #[derive(Debug, PartialEq, Eq, Clone, Hash, venndb::Any)]
+/// pub enum Department {
+///     #[any]
+///     Any,
+///     Hr,
+///     Engineering,
+/// }
+/// ```
+#[proc_macro_derive(Any, attributes(any))]
+pub fn any(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = syn::parse_macro_input!(input as syn::DeriveInput);
+    any::impl_any(&ast).into()
 }
 
 /// Transform the input into a token stream containing any generated implementations,

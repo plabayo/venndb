@@ -19,17 +19,12 @@ pub struct Employee {
     country: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Any)]
 pub enum Department {
+    #[any]
     Any,
     Hr,
     Engineering,
-}
-
-impl Any for Department {
-    fn is_any(&self) -> bool {
-        self == &Self::Any
-    }
 }
 
 fn employees() -> Vec<Employee> {

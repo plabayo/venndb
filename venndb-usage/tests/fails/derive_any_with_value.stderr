@@ -1,0 +1,11 @@
+error: Expected path attribute, found list attribute
+ --> tests/fails/derive_any_with_value.rs:5:7
+  |
+5 |     #[any(always)]
+  |       ^^^
+
+error: `#[derive(Any)]` needs a variant marked with `#[any]`
+ --> tests/fails/derive_any_with_value.rs:4:6
+  |
+4 | enum Department {
+  |      ^^^^^^^^^^
