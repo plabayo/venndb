@@ -265,6 +265,11 @@ pub(super) trait PredicateProxyDB: ProxyDB {
 impl VennProxyDB {
     fn run(&self, q: &Query) -> Option<VennProxyDBQueryResult<'_>> {
         let mut query = self.query();
+        Self::apply(q, &mut query);
+        query.execute()
+    }
+
+    fn apply(q: &Query, query: &mut VennProxyDBQuery<'_>) {
         let [tcp, udp, http, socks5, datacenter, residential, mobile] = q.bools;
         if let Some(v) = tcp {
             query.tcp(v);
@@ -302,7 +307,20 @@ impl VennProxyDB {
         for v in &q.labels[4] {
             query.asn(v.clone());
         }
-        query.execute()
+    }
+}
+
+impl VennProxyDB {
+    /// The id of a random proxy matching the query, that is not blocked.
+    pub(super) fn pick_unblocked(
+        &self,
+        query: &Query,
+        blocked: &venndb::RuntimeColumn,
+    ) -> Option<u64> {
+        let mut plan = self.query();
+        plan.and(venndb::Filter::Runtime(blocked, false));
+        Self::apply(query, &mut plan);
+        plan.execute().map(|result| result.any().id)
     }
 }
 
@@ -326,9 +344,7 @@ impl ProxyDB for VennProxyDB {
 
 impl PredicateProxyDB for VennProxyDB {
     fn pick_if(&self, query: &Query, predicate: impl Fn(&Proxy) -> bool) -> Option<u64> {
-        self.run(query)?
-            .filter(predicate)
-            .map(|result| result.any().id)
+        self.run(query)?.any_where(predicate).map(|proxy| proxy.id)
     }
 }
 

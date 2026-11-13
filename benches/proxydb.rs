@@ -97,6 +97,18 @@ fn pick_if<D: PredicateProxyDB>(bencher: Bencher, n: usize, scenario: Scenario) 
     bencher.bench(|| db.pick_if(next(&queries), predicate));
 }
 
+/// The predicate as a column set in advance, instead of a closure.
+fn pick_column(bencher: Bencher, n: usize, scenario: Scenario) {
+    let db = db::<VennProxyDB>(n);
+    let rows = proxies::rows(n);
+    let queries = proxies::queries(&rows, scenario, QUERIES);
+    let blocked = venndb::RuntimeColumn::new(n);
+    for (index, proxy) in rows.iter().enumerate() {
+        blocked.set(index, !predicate(proxy));
+    }
+    bencher.bench(|| db.pick_unblocked(next(&queries), &blocked));
+}
+
 /// Time and peak memory to create the database.
 #[divan::bench(
     types = [VennProxyDB, NaiveProxyDB, RoaringProxyDB, SqliteProxyDB],
@@ -127,6 +139,16 @@ macro_rules! scenarios {
                 )]
                 fn $name<D: ProxyDB>(bencher: Bencher, n: usize) {
                     pick::<D>(bencher, n, $scenario);
+                }
+            )+
+        }
+
+        mod pick_column {
+            use super::*;
+            $(
+                #[divan::bench(args = SIZES)]
+                fn $name(bencher: Bencher, n: usize) {
+                    pick_column(bencher, n, $scenario);
                 }
             )+
         }

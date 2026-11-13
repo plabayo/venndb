@@ -103,7 +103,7 @@ fn fleet() -> Fleet {
 
     Fleet::from_rows(vec![
         server(1, Tier::Edge, &[h2.clone(), h3.clone()], "BE", "Ghent"),
-        server(2, Tier::Edge, &[h2.clone()], "BE", "Antwerp"),
+        server(2, Tier::Edge, &[h2], "BE", "Antwerp"),
         server(3, Tier::Metal, &[plain, ssh.clone()], "NL", "Utrecht"),
         server(4, Tier::Metal, &[ssh, jump.clone()], "BE", "Ghent"),
         server(5, Tier::Cloud, &[h3, jump], "*", "*"),
