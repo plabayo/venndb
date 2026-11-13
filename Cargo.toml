@@ -103,6 +103,10 @@ bench-full = []
 [lints]
 workspace = true
 
+[[example]]
+name = "fleet"
+required-features = ["derive"]
+
 [[bench]]
 name = "proxydb"
 harness = false

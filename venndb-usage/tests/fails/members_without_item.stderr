@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       `members` needs `item = Type` to know the type of the values
+ --> tests/fails/members_without_item.rs:6:11
+  |
+6 |     tags: u8,
+  |           ^^

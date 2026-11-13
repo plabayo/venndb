@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       `any` cannot be used with `set`
+ --> tests/fails/any_and_set.rs:6:11
+  |
+6 |     tags: Vec<String>,
+  |           ^^^

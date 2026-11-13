@@ -1436,3 +1436,341 @@ mod tests_v0_5 {
         assert_eq!(results[1].id, 3);
     }
 }
+
+#[cfg(test)]
+mod tests_v0_7 {
+    use std::collections::{BTreeSet, HashSet};
+    use venndb::{Filter, FilterSet, VennDB};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub enum Skill {
+        Rust { years: u8 },
+        Go { years: u8 },
+        Design,
+    }
+
+    /// A set type of our own.
+    #[derive(Debug, Default)]
+    pub struct Tags(Vec<&'static str>);
+
+    impl FilterSet for Tags {
+        type Item = &'static str;
+
+        fn for_each_member(&self, f: impl FnMut(&&'static str)) {
+            self.0.iter().for_each(f);
+        }
+    }
+
+    fn is_everywhere(office: &String) -> bool {
+        office == "*"
+    }
+
+    fn badge(engineer: &Engineer) -> String {
+        format!("{}-{}", engineer.team, engineer.id % 8)
+    }
+
+    fn languages(spoken: &u8) -> impl Iterator<Item = char> {
+        let spoken = *spoken;
+        ['e', 'f', 'd']
+            .into_iter()
+            .enumerate()
+            .filter(move |(bit, _)| spoken >> bit & 1 == 1)
+            .map(|(_, language)| language)
+    }
+
+    #[derive(Debug, VennDB)]
+    pub struct Engineer {
+        #[venndb(key)]
+        id: u32,
+        #[venndb(key = badge)]
+        badge: String,
+        team: &'static str,
+        remote: bool,
+        #[venndb(filter, set)]
+        skills: Vec<Skill>,
+        #[venndb(filter, set)]
+        tags: Tags,
+        #[venndb(filter, set)]
+        floors: Option<BTreeSet<u8>>,
+        #[venndb(filter, members = HashSet::iter)]
+        projects: HashSet<u16>,
+        #[venndb(filter, members = languages, item = char)]
+        languages: u8,
+        #[venndb(filter, any = is_everywhere)]
+        office: String,
+        #[venndb(filter, any = is_everywhere)]
+        desk: Option<String>,
+    }
+
+    fn engineer(id: u32, team: &'static str, skills: &[Skill], office: &str) -> Engineer {
+        Engineer {
+            id,
+            badge: String::new(),
+            team,
+            remote: id.is_multiple_of(2),
+            skills: skills.to_vec(),
+            tags: Tags(if id < 3 { vec!["early", team] } else { vec![] }),
+            floors: (id != 2).then(|| [id as u8, 9].into()),
+            projects: [id as u16 * 10, 7].into(),
+            languages: id as u8,
+            office: office.to_owned(),
+            desk: (id != 4).then(|| if id == 1 { "*" } else { "a1" }.to_owned()),
+        }
+    }
+
+    fn db() -> EngineerDB {
+        EngineerDB::from_rows(vec![
+            engineer(
+                1,
+                "core",
+                &[Skill::Rust { years: 5 }, Skill::Design],
+                "ghent",
+            ),
+            engineer(2, "core", &[Skill::Rust { years: 1 }], "*"),
+            engineer(
+                3,
+                "web",
+                &[Skill::Go { years: 3 }, Skill::Design, Skill::Design],
+                "ghent",
+            ),
+            engineer(4, "web", &[], "paris"),
+        ])
+        .unwrap()
+    }
+
+    fn ids(result: Option<EngineerDBQueryResult<'_>>) -> Vec<u32> {
+        result
+            .map(|result| result.iter().map(|engineer| engineer.id).collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn test_set_filter() {
+        let db = db();
+        let mut query = db.query();
+        query.skills(Skill::Design);
+        assert_eq!(ids(query.execute()), [1, 3]);
+        query.skills(Skill::Rust { years: 1 });
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        query.reset().skills(Skill::Go { years: 9 });
+        assert_eq!(ids(query.execute()), []);
+        query.reset().tags("early").tags("web");
+        assert_eq!(ids(query.execute()), [1, 2]);
+        query.remote(true);
+        assert_eq!(ids(query.execute()), [2]);
+    }
+
+    #[test]
+    fn test_optional_set_filter() {
+        let db = db();
+        let mut query = db.query();
+        query.floors(9);
+        assert_eq!(ids(query.execute()), [1, 3, 4]);
+        query.reset().floors(3);
+        assert_eq!(ids(query.execute()), [3]);
+        query.reset().floors(2);
+        assert_eq!(ids(query.execute()), []);
+    }
+
+    #[test]
+    fn test_set_filter_members() {
+        let db = db();
+        let mut query = db.query();
+        query.projects(7u16);
+        assert_eq!(ids(query.execute()), [1, 2, 3, 4]);
+        query.reset().projects(30u16).projects(40u16);
+        assert_eq!(ids(query.execute()), [3, 4]);
+        query.reset().languages('f');
+        assert_eq!(ids(query.execute()), [2, 3]);
+        query.languages('d').skills(Skill::Design);
+        assert_eq!(ids(query.execute()), [3]);
+    }
+
+    #[test]
+    fn test_filter_where() {
+        let db = db();
+        let mut query = db.query();
+        query.skills_where(|skill| matches!(skill, Skill::Rust { .. }));
+        assert_eq!(ids(query.execute()), [1, 2]);
+        query.skills_where(|skill| matches!(skill, Skill::Rust { years } if *years > 2));
+        assert_eq!(ids(query.execute()), [1]);
+        query.reset().skills_where(|_| false);
+        assert_eq!(ids(query.execute()), []);
+        let mut calls = 0;
+        query.reset().skills_where(|_| {
+            calls += 1;
+            true
+        });
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        // once per distinct value, not per row
+        assert_eq!(calls, 4);
+        // wildcard rows match whatever is asked for
+        query.reset().office_where(|office| office.starts_with('p'));
+        assert_eq!(ids(query.execute()), [2, 4]);
+    }
+
+    #[test]
+    fn test_any_by_function() {
+        let db = db();
+        let mut query = db.query();
+        query.office("ghent");
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        query.reset().office("tokyo");
+        assert_eq!(ids(query.execute()), [2]);
+        query.reset().office("*");
+        assert_eq!(ids(query.execute()), [2]);
+        query.reset().desk("a1");
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        query.reset().desk("b2");
+        assert_eq!(ids(query.execute()), [1]);
+    }
+
+    #[test]
+    fn test_key_by_function() {
+        let db = db();
+        assert_eq!(db.get_by_badge("core-2").unwrap().id, 2);
+        assert_eq!(db.index_by_badge("web-4"), Some(3));
+        assert!(db.get_by_badge("").is_none());
+        assert_eq!(db.index_by_id(&3), Some(2));
+        assert_eq!(db.index_by_id(&9), None);
+        assert_eq!(db.get(2).unwrap().id, 3);
+        assert!(db.get(4).is_none());
+
+        let mut db = db;
+        let err = db.append(engineer(12, "core", &[], "x")).map(|_| ());
+        assert!(err.is_ok());
+        let mut duplicate = engineer(2, "core", &[], "x");
+        duplicate.id = 10;
+        let err = db.append(duplicate).unwrap_err();
+        assert_eq!(err.kind(), EngineerDBErrorKind::DuplicateKey);
+        assert_eq!(db.len(), 5);
+        assert!(db.get_by_id(&10).is_none());
+    }
+
+    #[test]
+    fn test_columns() {
+        let mut db = db();
+        let core = db.column(|engineer| engineer.team == "core");
+        let busy = db.runtime_column();
+        assert_eq!(busy.len(), 4);
+
+        let mut query = db.query();
+        query.and(Filter::Is(&core));
+        assert_eq!(ids(query.execute()), [1, 2]);
+        query.reset().and(Filter::Not(&core)).office("ghent");
+        assert_eq!(ids(query.execute()), [3]);
+
+        query.reset().and(Filter::Runtime(&busy, false));
+        assert_eq!(ids(query.execute()), [1, 2, 3, 4]);
+        assert!(busy.claim(db.index_by_id(&2).unwrap()));
+        assert!(!busy.claim(db.index_by_id(&2).unwrap()));
+        assert_eq!(ids(query.execute()), [1, 3, 4]);
+        query.reset().and(Filter::Runtime(&busy, true));
+        assert_eq!(ids(query.execute()), [2]);
+        query.and(Filter::Is(&core)).remote(true);
+        assert_eq!(ids(query.execute()), [2]);
+        query.remote(false);
+        assert_eq!(ids(query.execute()), []);
+
+        // rows added later are in neither column
+        db.append(engineer(5, "core", &[], "ghent")).unwrap();
+        let mut query = db.query();
+        query.and(Filter::Is(&core));
+        assert_eq!(ids(query.execute()), [1, 2]);
+        query.reset().and(Filter::Runtime(&busy, false));
+        assert_eq!(ids(query.execute()), [1, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_result() {
+        let mut db = db();
+        db.shrink_to_fit();
+        let mut query = db.query();
+        query.office("ghent");
+        let result = query.execute().unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.first().id, 1);
+        for _ in 0..20 {
+            assert_eq!(result.any_where(|engineer| engineer.remote).unwrap().id, 2);
+            assert!([1, 2, 3].contains(&result.any().id));
+        }
+        assert!(result.any_where(|engineer| engineer.id > 3).is_none());
+        let filtered = result.filter(|engineer| !engineer.remote).unwrap();
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(ids(Some(filtered)), [1, 3]);
+        assert!(result.filter(|_| false).is_none());
+    }
+
+    #[test]
+    fn test_unknown_value_next_to_known() {
+        let db = db();
+        let mut query = db.query();
+        query.skills(Skill::Go { years: 9 }).skills(Skill::Design);
+        assert_eq!(ids(query.execute()), [1, 3]);
+    }
+
+    #[test]
+    fn test_many_rows() {
+        #[derive(Debug, VennDB)]
+        struct Point {
+            #[venndb(key)]
+            id: u32,
+            even: bool,
+            third: Option<bool>,
+            #[venndb(filter)]
+            bucket: u32,
+            #[venndb(filter, set)]
+            divisors: Vec<u32>,
+        }
+
+        let rows = 20_000u32;
+        let db = PointDB::from_iter((0..rows).map(|id| {
+            Point {
+                id,
+                even: id % 2 == 0,
+                third: (id % 5 != 0).then_some(id % 3 == 0),
+                bucket: id % 1000,
+                divisors: [2, 3, 5, 7, 11]
+                    .into_iter()
+                    .filter(|d| id % d == 0)
+                    .collect(),
+            }
+        }))
+        .unwrap();
+
+        let check = |query: &PointDBQuery<'_>, expected: &dyn Fn(u32) -> bool| {
+            let found: Vec<u32> = query
+                .execute()
+                .map(|result| result.iter().map(|point| point.id).collect())
+                .unwrap_or_default();
+            let expected: Vec<u32> = (0..rows).filter(|id| expected(*id)).collect();
+            assert_eq!(found, expected);
+        };
+
+        let mut query = db.query();
+        check(&query, &|_| true);
+        check(query.even(true), &|id| id % 2 == 0);
+        check(query.third(false), &|id| {
+            id % 2 == 0 && id % 5 != 0 && id % 3 != 0
+        });
+        check(query.bucket(6u32), &|id| {
+            id % 1000 == 6 && id % 5 != 0 && id % 3 != 0
+        });
+        check(query.reset().bucket(6u32).bucket(7u32).even(false), &|id| {
+            id % 1000 == 7
+        });
+        check(query.reset().divisors(7u32).divisors(11u32), &|id| {
+            id % 7 == 0 || id % 11 == 0
+        });
+        check(query.third(true).even(false), &|id| {
+            (id % 7 == 0 || id % 11 == 0) && id % 5 != 0 && id % 3 == 0 && id % 2 == 1
+        });
+        check(
+            query
+                .reset()
+                .divisors_where(|d| *d > 5)
+                .bucket_where(|b| *b < 3),
+            &|id| (id % 7 == 0 || id % 11 == 0) && id % 1000 < 3,
+        );
+    }
+}

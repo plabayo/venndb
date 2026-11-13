@@ -1,0 +1,6 @@
+error: Invalid field-level `venndb` attribute
+       `set` cannot be used with `bool`
+ --> tests/fails/set_bool.rs:6:15
+  |
+6 |     is_alive: bool,
+  |               ^^^^
