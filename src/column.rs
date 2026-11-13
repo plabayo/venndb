@@ -7,6 +7,10 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
+/// The wildcard rows are part of every query on their column,
+/// which makes them worth a bitmask long before other rows are.
+const ANY_DENSE_RATIO: usize = 1024;
+
 /// The rows of a unique key.
 #[derive(Debug, Clone)]
 pub struct KeyIndex<K> {
@@ -188,7 +192,7 @@ impl<T: Hash + Eq> ValueColumn<T> {
 
     /// Make a row a wildcard, matching any value.
     pub fn push_any(&mut self, row: usize) {
-        self.any.insert(row);
+        self.any.insert_at(row, ANY_DENSE_RATIO);
     }
 
     /// The rows with the given value, wildcards not included.
@@ -338,6 +342,26 @@ mod tests {
         let mut values: Vec<_> = column.values().map(|(v, rows)| (*v, rows.len())).collect();
         values.sort_unstable();
         assert_eq!(values, [('a', 2), ('b', 1), ('c', 1)]);
+    }
+
+    #[test]
+    fn wildcards_turn_dense_early() {
+        let mut column = ValueColumn::new();
+        // 1 row in 1000: far too few for a value, enough for the wildcards
+        for row in 0..20 {
+            column.push(row * 1000, &'a');
+            column.push_any(row * 1000 + 1);
+        }
+        let mut plan = Plan::new(20_000, 1);
+        column.filter(&mut plan, 0, &'a', true);
+        let matches = plan.execute().unwrap();
+        assert!(matches.iter().eq((0..20).map(|row| row * 1000 + 1)));
+        let words = |set: &RowSet| matches!(set.repr(), crate::rowset::Repr::Dense(..));
+        assert!(words(column.any()) && !words(column.rows(&'a').unwrap()));
+        // but not at 1 row in 2000
+        let mut column = ValueColumn::<char>::new();
+        (0..20).for_each(|row| column.push_any(row * 2000));
+        assert!(!words(column.any()));
     }
 
     #[test]

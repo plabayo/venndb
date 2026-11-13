@@ -101,6 +101,11 @@ impl RowSet {
     ///
     /// Panics if the row is not below [`RowSet::MAX_ROWS`].
     pub fn insert(&mut self, row: usize) -> bool {
+        self.insert_at(row, DENSE_RATIO)
+    }
+
+    /// Add a row to a set that turns dense at 1 row in `ratio`, instead of the usual.
+    pub(crate) fn insert_at(&mut self, row: usize, ratio: usize) -> bool {
         let small = stored(row);
         match &mut self.repr {
             Repr::Sparse(rows) => {
@@ -112,7 +117,7 @@ impl RowSet {
                     _ => rows.push(small),
                 }
                 let span = rows.last().map_or(0, |last| *last as usize + 1);
-                if rows.len() >= DENSE_MIN && rows.len() as u64 * DENSE_RATIO as u64 > span as u64 {
+                if rows.len() >= DENSE_MIN && rows.len() as u64 * ratio as u64 > span as u64 {
                     self.repr = Repr::Dense(dense(rows, span), rows.len());
                 }
                 true
@@ -121,7 +126,7 @@ impl RowSet {
                 let (at, bit) = (row / WORD, 1 << (row % WORD));
                 if at >= words.len() {
                     // far beyond the last row: the set is thin again
-                    if (*ones as u64 * DENSE_RATIO as u64 * 2) < row as u64 + 1 {
+                    if (*ones as u64 * ratio as u64 * 2) < row as u64 + 1 {
                         let mut rows = sparse(words, *ones + 1);
                         rows.push(small);
                         self.repr = Repr::Sparse(rows);
