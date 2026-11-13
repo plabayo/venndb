@@ -1,0 +1,35 @@
+error: Invalid field-level `venndb` attribute
+       A filter on this field needs a query method `any`, which exists already: rename the field or use `#[venndb(skip)]`
+ --> tests/fails/method_any.rs:5:5
+  |
+5 |     any: bool,
+  |     ^^^
+
+error: Invalid field-level `venndb` attribute
+       A filter on this field needs a query method `tag_ref`, which exists already: rename the field or use `#[venndb(skip)]`
+ --> tests/fails/method_any.rs:8:5
+  |
+8 |     tag_ref: bool,
+  |     ^^^^^^^
+
+error[E0592]: duplicate definitions with name `tag_ref`
+ --> tests/fails/method_any.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^
+  |                 |
+  |                 duplicate definitions for `tag_ref`
+  |                 other definition for `tag_ref`
+  |
+  = note: this error originates in the derive macro `VennDB` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `any`
+ --> tests/fails/method_any.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^
+  |                 |
+  |                 duplicate definitions for `any`
+  |                 other definition for `any`
+  |
+  = note: this error originates in the derive macro `VennDB` (in Nightly builds, run with -Z macro-backtrace for more info)

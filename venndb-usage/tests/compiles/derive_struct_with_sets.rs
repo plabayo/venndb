@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use venndb::{Filter, VennDB};
+use venndb::{Filter, RuntimeColumn, VennDB};
 
 fn is_any(value: &u8) -> bool {
     *value == 0
@@ -36,7 +36,7 @@ struct Employee {
 
 fn main() {
     let db = EmployeeDB::new();
-    let active = db.runtime_column();
+    let active = RuntimeColumn::new();
     let senior = db.column(|employee| employee.level > 3);
     let mut query = db.query();
     query

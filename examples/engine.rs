@@ -20,7 +20,7 @@ fn main() {
 
     // a set of rows is a list as long as it is small, a bitmask once it is not
     let even: RowSet = (0..cities.len()).filter(|row| row % 2 == 0).collect();
-    let hidden = RuntimeColumn::new(cities.len());
+    let hidden = RuntimeColumn::new();
     hidden.set(4, true);
 
     // a plan has a slot per filter that can be set more than once

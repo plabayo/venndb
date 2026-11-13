@@ -128,7 +128,9 @@ fn impl_from_args_struct(
 
 /// Report the filters of which a generated query method would exist twice.
 fn check_method_names(errors: &Errors, fields: &[StructField]) {
-    let mut taken: Vec<String> = ["and", "reset", "execute"].map(String::from).into();
+    let mut taken: Vec<String> = ["and", "any", "any_where", "reset", "execute"]
+        .map(String::from)
+        .into();
     for info in fields.iter().filter_map(StructField::info) {
         let (name, methods) = match &info {
             field::FieldInfo::Key(_) => continue,
@@ -138,6 +140,7 @@ fn check_method_names(errors: &Errors, fields: &[StructField]) {
                 vec![
                     field.name.to_string(),
                     field.where_method_name().to_string(),
+                    field.ref_method_name().to_string(),
                 ],
             ),
         };

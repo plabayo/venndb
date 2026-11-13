@@ -287,14 +287,14 @@ Create a column for it and add it to the query:
 // computed once, for a fact about a row that is no property
 let seniors = db.column(|employee| employee.years > 10);
 // set and unset at any time and from any thread, without a lock
-let on_leave = db.runtime_column();
+let on_leave = RuntimeColumn::new();
 on_leave.set(db.index_by_id(&35).unwrap(), true);
 
 query.is_manager(true).and(Filter::Is(&seniors)).and(Filter::Runtime(&on_leave, false));
 ```
 
-Both only know about the rows the database had when they were created,
-see [the `runtime` example](./examples/runtime.rs) for what that means when rows are added or the database is replaced.
+The first only knows about the rows the database had when it was created, in the second any row can be set at any time:
+see [the `runtime` example](./examples/runtime.rs), also for what to do when the database is replaced.
 For a condition that fits no column there is `EmployeeDBQueryResult::any_where(predicate)`.
 
 > ❓ How can I provide custom validation of rows prior to them getting appended?
@@ -757,7 +757,6 @@ Database: (e.g. `EmployeeInMemDB`):
 | `EmployeeInMemDB::get_by_id<Q>(&self, data: impl ::std::convert::Into<Employee>) -> Option<&Employee> where Employee ::std::borrow::Borrow<Q>, Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized` | look up a row by the `id` key property. This method will be generated for each property marked with `#[venndb(key)`. e.g. if you have key property named `foo: MyType` property there will be also a `get_by_foo(&self, ...)` method generated. |
 | `EmployeeInMemDB::index_by_id<Q>(&self, key: &Q) -> Option<usize>` and `EmployeeInMemDB::get(&self, index: usize) -> Option<&Employee>` | the row index for a key, as used by columns, and the row for an index. |
 | `EmployeeInMemDB::column(&self, predicate: impl FnMut(&Employee) -> bool) -> venndb::RowSet` | the rows matching the predicate, to add to a query with `Filter::Is` or `Filter::Not`. |
-| `EmployeeInMemDB::runtime_column(&self) -> venndb::RuntimeColumn` | a column of which rows can be set at any time, to add to a query with `Filter::Runtime`. |
 | `EmployeeInMemDB::shrink_to_fit(&mut self)` | release the memory that is not needed, done for you by `from_rows` and `from_iter`. |
 | `EmployeeInMemDB::query(&self) -> EmployeeInMemDBQuery` | create a `EmployeeInMemDBQuery` builder to compose a filter composition to query the database. The default builder will match all rows. See the method API for `EmployeeInMemDBQuery` for more information |
 
@@ -771,7 +770,7 @@ Query (e.g. `EmployeeInMemDBQuery`)
 | `EmployeeInMemDBQuery::department(&mut self, value: impl ::std::convert::Into<Department>) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. Filter maps that have a `Option<T>` type have exactly the same signature. Duering query you can call this method multiple times in case you wish to allow multiple variants. |
 
 | `EmployeeInMemDBQuery::department_where(&mut self, predicate: impl FnMut(&Department) -> bool) -> &mut Self` | filter on the values for which the predicate returns `true`. Called once per distinct value, not once per row. One such method per non-`bool` filter. |
-| `EmployeeInMemDBQuery::and(&mut self, filter: venndb::Filter<'a>) -> &mut Self` | add a filter on a column created with `column` or `runtime_column`. |
+| `EmployeeInMemDBQuery::and(&mut self, filter: venndb::Filter<'a>) -> &mut Self` | add a filter on a column created with `column`, or on a `venndb::RuntimeColumn`, of which rows can be set at any time. |
 
 Query Result (e.g. `EmployeeInMemDBQueryResult`)
 

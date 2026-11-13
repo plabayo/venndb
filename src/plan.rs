@@ -11,6 +11,13 @@ const DRIVE_RATIO: usize = 256;
 /// The number of random rows tried before filtering all of them.
 const RANDOM_TRIES: usize = 8;
 
+/// The number of random rows of the database tried for a query,
+/// before working out all rows that meet it.
+const GUESSES: usize = 16;
+
+/// Random rows are only tried if at least 1 row in `GUESS_RATIO` is expected to meet the query.
+const GUESS_RATIO: f64 = 8.0;
+
 /// A few row sets, of which the first ones are kept without allocating.
 #[derive(Debug, Clone, Default)]
 pub struct RowSets<'a> {
@@ -85,6 +92,17 @@ impl Filter<'_> {
             Self::AnyOf(sets) => sets.iter().any(|set| set.contains(row)),
             Self::Runtime(column, value) => column.get(row) == *value,
         }
+    }
+
+    /// The share of the rows that meet the filter at most, as far as it is known.
+    fn share(&self, rows: usize) -> f64 {
+        let rows_in = match self {
+            Self::Is(set) => set.len(),
+            Self::Not(set) => rows.saturating_sub(set.len()),
+            Self::AnyOf(sets) => sets.iter().map(RowSet::len).sum(),
+            Self::Runtime(..) => rows,
+        };
+        rows_in.min(rows) as f64 / rows as f64
     }
 
     /// The work it takes to walk over all rows of the filter, if that is possible.
@@ -206,6 +224,51 @@ impl<'a> Plan<'a> {
         }
     }
 
+    /// A random row that meets all filters, `None` if there are no such rows.
+    ///
+    /// Each of those rows is as likely as any other. A query that many rows meet
+    /// is answered by trying random rows, without working out all rows that meet it.
+    #[must_use]
+    pub fn random(&self) -> Option<usize> {
+        match self.guess(|_| true) {
+            Guess::Found(row) => Some(row),
+            Guess::Nothing => None,
+            Guess::Unknown => self.execute().map(|matches| matches.random()),
+        }
+    }
+
+    /// A random row that meets all filters and for which the predicate returns `true`.
+    #[must_use]
+    pub fn random_where(&self, mut predicate: impl FnMut(usize) -> bool) -> Option<usize> {
+        match self.guess(&mut predicate) {
+            Guess::Found(row) => Some(row),
+            Guess::Nothing => None,
+            Guess::Unknown => self.execute()?.random_where(predicate),
+        }
+    }
+
+    /// Try random rows of the database, if enough of them are expected to meet the filters.
+    fn guess(&self, mut accept: impl FnMut(usize) -> bool) -> Guess {
+        if self.rows == 0 || self.filters().any(|filter| filter.walk_cost() == Some(0)) {
+            return Guess::Nothing;
+        }
+        // as if the filters have nothing to do with each other, which is good enough to decide
+        let share: f64 = self
+            .filters()
+            .map(|filter| filter.share(self.rows))
+            .product();
+        if share * GUESS_RATIO < 1.0 {
+            return Guess::Unknown;
+        }
+        for _ in 0..GUESSES {
+            let row = crate::rng::below(self.rows);
+            if self.filters().all(|filter| filter.contains(row)) && accept(row) {
+                return Guess::Found(row);
+            }
+        }
+        Guess::Unknown
+    }
+
     /// Walk over the rows of one filter, keeping those that meet the others.
     fn walk(&self, driver: usize) -> Option<Matches<'a>> {
         let keep = |row: &usize| {
@@ -308,12 +371,7 @@ impl<'a> Plan<'a> {
                     }
                     and(&mut mask, scratch.iter().copied());
                 }
-                Filter::Runtime(column, true) => and(&mut mask, column.words()),
-                Filter::Runtime(column, false) => {
-                    for (word, other) in mask.iter_mut().zip(column.words()) {
-                        *word &= !other;
-                    }
-                }
+                Filter::Runtime(column, value) => column.filter(&mut mask, *value),
             }
         }
         if !self.rows.is_multiple_of(WORD) {
@@ -322,6 +380,17 @@ impl<'a> Plan<'a> {
         let ones: usize = mask.iter().map(|word| word.count_ones() as usize).sum();
         (ones > 0).then_some(Matches(Repr2::Mask(mask, ones)))
     }
+}
+
+/// What trying random rows came to.
+#[derive(Debug, PartialEq, Eq)]
+enum Guess {
+    /// A row that meets the query.
+    Found(usize),
+    /// No row can meet the query.
+    Nothing,
+    /// None of the rows tried meets the query, or none was tried.
+    Unknown,
 }
 
 /// Keep the bits that are also set in the other words, which may be fewer.
@@ -504,8 +573,9 @@ mod tests {
     fn both_ways_agree_with_a_scan() {
         let mut random = Random(0x1234_5678_9ABC_DEF1);
         for rows in [1, 63, 64, 65, 200, 1000, 5000] {
-            let column = RuntimeColumn::new(rows / 2 + random.next(rows));
-            for row in 0..column.len() {
+            let column = RuntimeColumn::new();
+            // also rows the database does not have
+            for row in 0..rows + 70 {
                 column.set(row, random.next(3) == 0);
             }
             let sets: Vec<RowSet> = [1, 2, 3, 10, 50, 100, 400, 1, 7, 300]
@@ -541,6 +611,20 @@ mod tests {
                     }
                 }
                 assert_eq!(found(plan.execute()), expected, "{filters:?}");
+                // a random row is one of them, however it is found
+                for _ in 0..3 {
+                    let row = plan.random();
+                    assert_eq!(row.is_some(), !expected.is_empty(), "{filters:?}");
+                    assert!(row.is_none_or(|row| expected.contains(&row)), "{filters:?}");
+                    let odd = plan.random_where(|row| row % 2 == 1);
+                    assert_eq!(odd.is_some(), expected.iter().any(|row| row % 2 == 1));
+                    assert!(odd.is_none_or(|row| row % 2 == 1 && expected.contains(&row)));
+                }
+                match plan.guess(|_| true) {
+                    Guess::Found(row) => assert!(expected.contains(&row), "{filters:?}"),
+                    Guess::Nothing => assert!(expected.is_empty(), "{filters:?}"),
+                    Guess::Unknown => (),
+                }
             }
         }
     }
@@ -556,7 +640,7 @@ mod tests {
     fn random_reaches_every_row() {
         let odd: RowSet = (0..640).filter(|row| row % 2 == 1).collect();
         let few: RowSet = [3, 500, 77].into_iter().collect();
-        let column = RuntimeColumn::new(0);
+        let column = RuntimeColumn::new();
         let mut plans = [
             Plan::new(8, 0),
             Plan::new(640, 0),
@@ -579,6 +663,62 @@ mod tests {
             }
             assert!(seen.iter().eq(rows.iter()), "{seen:?}");
         }
+    }
+
+    #[test]
+    fn guesses_when_many_rows_match() {
+        let rows = 6400;
+        let half: RowSet = (0..rows).filter(|row| row % 2 == 0).collect();
+        let few: RowSet = (0..rows).filter(|row| row % 100 == 0).collect();
+        let none = RowSet::new();
+        let column = RuntimeColumn::new();
+
+        // nothing to filter on, or filters most rows meet: a random row will do
+        let mut plan = Plan::new(rows, 0);
+        assert!(matches!(plan.guess(|_| true), Guess::Found(_)));
+        plan.and(Filter::Is(&half));
+        plan.and(Filter::Not(&few));
+        plan.and(Filter::Runtime(&column, false));
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..2000 {
+            let Guess::Found(row) = plan.guess(|_| true) else {
+                panic!("1 row in 2 meets the filters");
+            };
+            assert!(row % 2 == 0 && row % 100 != 0);
+            seen.insert(row);
+            seen.insert(plan.random().unwrap());
+        }
+        // spread over all of them
+        assert!(seen.len() > 1000 && seen.first() < Some(&100) && seen.last() > Some(&6300));
+        // a row the caller refuses is not returned
+        assert_eq!(plan.guess(|_| false), Guess::Unknown);
+        assert_eq!(plan.random_where(|_| false), None);
+        assert_eq!(plan.random_where(|row| row == 42), Some(42));
+
+        // too few rows meet the filters to hit one by chance
+        let mut plan = Plan::new(rows, 0);
+        plan.and(Filter::Is(&few));
+        assert_eq!(plan.guess(|_| true), Guess::Unknown);
+        assert!(plan.random().unwrap().is_multiple_of(100));
+        // exactly 1 row in 8 is still tried, less is not
+        let eighth: RowSet = (0..rows).filter(|row| row % 8 == 0).collect();
+        let mut plan = Plan::new(rows, 0);
+        plan.and(Filter::Is(&eighth));
+        assert!((0..50).any(|_| matches!(plan.guess(|_| true), Guess::Found(_))));
+        plan.and(Filter::Is(&half));
+        assert_eq!(plan.guess(|_| true), Guess::Unknown);
+
+        // no row at all
+        let mut plan = Plan::new(rows, 0);
+        plan.and(Filter::Is(&none));
+        assert_eq!(plan.guess(|_| true), Guess::Nothing);
+        assert_eq!((plan.random(), plan.random_where(|_| true)), (None, None));
+        assert_eq!(Plan::new(0, 0).guess(|_| true), Guess::Nothing);
+        // rows beyond those of the database are never guessed
+        let beyond: RowSet = (0..rows * 2).collect();
+        let mut plan = Plan::new(10, 0);
+        plan.and(Filter::Is(&beyond));
+        assert!((0..200).all(|_| plan.random().unwrap() < 10));
     }
 
     #[test]

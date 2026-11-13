@@ -40,7 +40,8 @@ New Features:
   * rows with an _any_ value always match;
 * [[`#16`](https://github.com/plabayo/venndb/issues/16)]: support columns that are no property of a row:
   * `<DB>::column(predicate)` is computed once;
-  * `<DB>::runtime_column()` can be changed at any time and from any thread;
+  * a `venndb::RuntimeColumn` can be changed at any time and from any thread,
+    and grows along with the database;
   * add them to a query with `<DB>Query::and`;
 * [[`#21`](https://github.com/plabayo/venndb/issues/21)]: support keys computed from the row by a function: `#[venndb(key = path)]`;
 * support wildcards decided by a function instead of `venndb::Any`: `#[venndb(filter, any = path)]`;
@@ -65,7 +66,7 @@ pub struct Employee {
 }
 
 let db = EmployeeDB::from_rows(/* .. */).unwrap();
-let on_leave = db.runtime_column();
+let on_leave = RuntimeColumn::new();
 on_leave.set(db.index_by_id(&42).unwrap(), true);
 
 let mut query = db.query();

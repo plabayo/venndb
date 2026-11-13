@@ -26,7 +26,7 @@ struct Row {
     #[venndb(filter, any = value)]
     value: String,
     #[venndb(filter, any = value)]
-    any: Option<String>,
+    anything: Option<String>,
     #[venndb(filter, members = member)]
     member: Vec<u8>,
     rows: bool,
@@ -45,7 +45,7 @@ fn main() {
     db.append(Row {
         index: 1,
         value: "*".to_owned(),
-        any: None,
+        anything: None,
         member: vec![1],
         rows: true,
         db: true,
@@ -70,5 +70,6 @@ fn main() {
         .key(1)
         .predicate(true);
     assert_eq!(query.execute().unwrap().first().index, 1);
-    assert!(query.any("b").execute().is_none());
+    assert!(query.anything("b").execute().is_none());
+    assert!(query.any().is_none());
 }

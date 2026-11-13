@@ -222,7 +222,7 @@ query
     .endpoints_where(|endpoint| matches!(endpoint, Endpoint::Http { tls: true, .. }))
     .gpu(true);
 
-let draining = fleet.runtime_column();
+let draining = RuntimeColumn::new();
 draining.set(fleet.index_by_id(&amp;4).unwrap(), true);
 
 let mut query = fleet.query();

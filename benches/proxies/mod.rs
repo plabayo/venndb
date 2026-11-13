@@ -294,19 +294,19 @@ impl VennProxyDB {
             query.mobile(v);
         }
         for v in &q.labels[0] {
-            query.pool(v.clone());
+            query.pool_ref(v);
         }
         for v in &q.labels[1] {
-            query.country(v.clone());
+            query.country_ref(v);
         }
         for v in &q.labels[2] {
-            query.state(v.clone());
+            query.state_ref(v);
         }
         for v in &q.labels[3] {
-            query.city(v.clone());
+            query.city_ref(v);
         }
         for v in &q.labels[4] {
-            query.asn(v.clone());
+            query.asn_ref(v);
         }
     }
 }
@@ -321,7 +321,14 @@ impl VennProxyDB {
         let mut plan = self.query();
         plan.and(venndb::Filter::Runtime(blocked, false));
         Self::apply(query, &mut plan);
-        plan.execute().map(|result| result.any().id)
+        plan.any().map(|proxy| proxy.id)
+    }
+}
+
+impl VennProxyDB {
+    /// The id of a random proxy matching the query, picked among all of those.
+    pub(super) fn pick_among_all(&self, query: &Query) -> Option<u64> {
+        self.run(query).map(|result| result.any().id)
     }
 }
 
@@ -335,7 +342,9 @@ impl ProxyDB for VennProxyDB {
     }
 
     fn pick(&self, query: &Query) -> Option<u64> {
-        self.run(query).map(|result| result.any().id)
+        let mut plan = self.query();
+        Self::apply(query, &mut plan);
+        plan.any().map(|proxy| proxy.id)
     }
 
     fn count(&self, query: &Query) -> usize {
@@ -345,7 +354,9 @@ impl ProxyDB for VennProxyDB {
 
 impl PredicateProxyDB for VennProxyDB {
     fn pick_if(&self, query: &Query, predicate: impl Fn(&Proxy) -> bool) -> Option<u64> {
-        self.run(query)?.any_where(predicate).map(|proxy| proxy.id)
+        let mut plan = self.query();
+        Self::apply(query, &mut plan);
+        plan.any_where(predicate).map(|proxy| proxy.id)
     }
 }
 

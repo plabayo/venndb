@@ -5,7 +5,7 @@
 //! Run with `cargo run --example fleet`.
 
 use std::collections::HashSet;
-use venndb::{Filter, VennDB};
+use venndb::{Filter, RuntimeColumn, VennDB};
 
 /// A way to reach a server. One server offers several of these.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -164,7 +164,7 @@ fn main() {
     // a fact about a row that is no field: computed once, used like a column
     let redundant = fleet.column(|server| server.endpoints.len() > 1);
     // state that changes while the fleet is in use: set from any thread, no lock
-    let draining = fleet.runtime_column();
+    let draining = RuntimeColumn::new();
     draining.set(fleet.index_by_id(&4).unwrap(), true);
 
     let mut query = fleet.query();

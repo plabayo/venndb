@@ -3,7 +3,7 @@
 //! Run with `cargo run --example columns`, and see the `runtime` example
 //! for more on the columns that change.
 
-use venndb::{Filter, VennDB};
+use venndb::{Filter, RuntimeColumn, VennDB};
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -30,7 +30,7 @@ fn main() {
     // computed once, for a fact about a row that is no property
     let seniors = db.column(|employee| employee.years > 10);
     // set and unset at any time and from any thread, without a lock
-    let on_leave = db.runtime_column();
+    let on_leave = RuntimeColumn::new();
     on_leave.set(db.index_by_id(&35).unwrap(), true);
 
     let mut query = db.query();
@@ -45,7 +45,7 @@ fn main() {
     assert_eq!(ids(query.execute()), [14, 35, 56]);
 
     // a row can be claimed by one thread only
-    let busy = db.runtime_column();
+    let busy = RuntimeColumn::new();
     let claims: usize = std::thread::scope(|scope| {
         let claim = || usize::from(busy.claim(db.index_by_id(&14).unwrap()));
         let threads: Vec<_> = (0..4).map(|_| scope.spawn(claim)).collect();

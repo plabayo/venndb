@@ -1440,7 +1440,7 @@ mod tests_v0_5 {
 #[cfg(test)]
 mod tests_v0_7 {
     use std::collections::{BTreeSet, HashSet};
-    use venndb::{Filter, FilterSet, VennDB};
+    use venndb::{Filter, FilterSet, RuntimeColumn, VennDB};
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub enum Skill {
@@ -1655,8 +1655,8 @@ mod tests_v0_7 {
     fn test_columns() {
         let mut db = db();
         let core = db.column(|engineer| engineer.team == "core");
-        let busy = db.runtime_column();
-        assert_eq!(busy.len(), 4);
+        let busy = RuntimeColumn::new();
+        assert_eq!(busy.count(), 0);
 
         let mut query = db.query();
         query.and(Filter::Is(&core));
@@ -1676,13 +1676,17 @@ mod tests_v0_7 {
         query.remote(false);
         assert_eq!(ids(query.execute()), []);
 
-        // rows added later are in neither column
+        // rows added later are not in a computed column, and can be set in a runtime one
         db.append(engineer(5, "core", &[], "ghent")).unwrap();
         let mut query = db.query();
         query.and(Filter::Is(&core));
         assert_eq!(ids(query.execute()), [1, 2]);
         query.reset().and(Filter::Runtime(&busy, false));
         assert_eq!(ids(query.execute()), [1, 3, 4, 5]);
+        assert!(busy.claim(db.index_by_id(&5).unwrap()));
+        assert_eq!(ids(query.execute()), [1, 3, 4]);
+        query.reset().and(Filter::Runtime(&busy, true));
+        assert_eq!(ids(query.execute()), [2, 5]);
     }
 
     #[test]
@@ -1815,6 +1819,63 @@ mod tests_v0_7 {
         assert_eq!(query.execute().unwrap().len(), 2);
         query.reset().place(Place::Near { _km: 1 });
         assert_eq!(query.execute().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_query_any() {
+        let db = db();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut query = db.query();
+        // nearly all rows match: found by trying rows
+        query.projects(7u16);
+        for _ in 0..200 {
+            seen.insert(query.any().unwrap().id);
+            assert_eq!(
+                query
+                    .any_where(|engineer| engineer.team == "web" && engineer.remote)
+                    .unwrap()
+                    .id,
+                4
+            );
+        }
+        assert!(seen.into_iter().eq([1, 2, 3, 4]));
+        assert!(query.any_where(|engineer| engineer.id > 4).is_none());
+        // one row matches: found by working out the rows
+        query.reset().skills(Skill::Go { years: 3 });
+        assert_eq!(query.any().unwrap().id, 3);
+        assert_eq!(query.any_where(|engineer| !engineer.remote).unwrap().id, 3);
+        assert!(query.any_where(|engineer| engineer.remote).is_none());
+        // no row matches
+        query.reset().skills(Skill::Go { years: 9 });
+        assert!(query.any().is_none() && query.any_where(|_| true).is_none());
+        assert!(EngineerDB::new().query().any().is_none());
+    }
+
+    #[test]
+    fn test_query_by_reference() {
+        let db = db();
+        let mut query = db.query();
+        // the same as by value, also for what a wildcard means
+        query.office_ref("ghent");
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        query.reset().office_ref("tokyo");
+        assert_eq!(ids(query.execute()), [2]);
+        query.reset().office_ref("*");
+        assert_eq!(ids(query.execute()), [2]);
+        query.reset().desk_ref("b2");
+        assert_eq!(ids(query.execute()), [1]);
+        // values are combined as they are by value
+        query
+            .reset()
+            .skills_ref(&Skill::Design)
+            .skills(Skill::Rust { years: 1 });
+        assert_eq!(ids(query.execute()), [1, 2, 3]);
+        query.reset().projects_ref(&30).projects_ref(&99);
+        assert_eq!(ids(query.execute()), [3]);
+        query.reset().projects_ref(&99);
+        assert_eq!(ids(query.execute()), []);
+        query.reset().tags_ref("early").floors_ref(&1);
+        assert_eq!(ids(query.execute()), [1]);
     }
 
     #[test]

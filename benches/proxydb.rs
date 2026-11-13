@@ -97,12 +97,19 @@ fn pick_if<D: PredicateProxyDB>(bencher: Bencher, n: usize, scenario: Scenario) 
     bencher.bench(|| db.pick_if(next(&queries), predicate));
 }
 
+/// All matches worked out before one is picked, as `pick` only does for queries few rows meet.
+fn pick_among_all(bencher: Bencher, n: usize, scenario: Scenario) {
+    let db = db::<VennProxyDB>(n);
+    let queries = proxies::queries(&proxies::rows(n), scenario, QUERIES);
+    bencher.bench(|| db.pick_among_all(next(&queries)));
+}
+
 /// The predicate as a column set in advance, instead of a closure.
 fn pick_column(bencher: Bencher, n: usize, scenario: Scenario) {
     let db = db::<VennProxyDB>(n);
     let rows = proxies::rows(n);
     let queries = proxies::queries(&rows, scenario, QUERIES);
-    let blocked = venndb::RuntimeColumn::new(n);
+    let blocked = venndb::RuntimeColumn::new();
     for (index, proxy) in rows.iter().enumerate() {
         blocked.set(index, !predicate(proxy));
     }
@@ -139,6 +146,16 @@ macro_rules! scenarios {
                 )]
                 fn $name<D: ProxyDB>(bencher: Bencher, n: usize) {
                     pick::<D>(bencher, n, $scenario);
+                }
+            )+
+        }
+
+        mod pick_among_all {
+            use super::*;
+            $(
+                #[divan::bench(args = SIZES)]
+                fn $name(bencher: Bencher, n: usize) {
+                    pick_among_all(bencher, n, $scenario);
                 }
             )+
         }

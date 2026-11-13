@@ -1,5 +1,5 @@
 //! A column that changes while the database is in use: who sets it, who reads it,
-//! and what happens to it when rows are added or the database is replaced.
+//! and what becomes of it when rows are added or the database is replaced.
 //!
 //! Run with `cargo run --example runtime`.
 
@@ -36,7 +36,7 @@ fn available(db: &WorkerDB, blocked: &RuntimeColumn, region: &'static str) -> Ve
 /// A column knows rows by their position, which is not the same in another database:
 /// the key of a row is what tells which row of the new database it is.
 fn carry_over(old: &WorkerDB, blocked: &RuntimeColumn, new: &WorkerDB) -> RuntimeColumn {
-    let column = new.runtime_column();
+    let column = RuntimeColumn::new();
     for worker in blocked.iter().filter_map(|index| old.get(index)) {
         if let Some(index) = new.index_by_name(&worker.name) {
             column.set(index, true);
@@ -56,9 +56,9 @@ fn main() {
         .unwrap(),
     );
 
-    // a column is made for a database, and has a row for each of its rows
-    let blocked = db.runtime_column();
-    assert_eq!((blocked.len(), blocked.count()), (4, 0));
+    // a column is no part of a database: it is told which rows are set, by their index
+    let blocked = RuntimeColumn::new();
+    assert_eq!(blocked.count(), 0);
     assert_eq!(available(&db, &blocked, "eu"), ["ada", "bob", "dee"]);
 
     // a clone is the same column: hand one to whatever knows when a row has to change,
@@ -84,12 +84,13 @@ fn main() {
     assert!(blocked.claim(db.index_by_name("cyd").unwrap()));
     assert!(!blocked.claim(db.index_by_name("cyd").unwrap()));
 
-    // rows appended afterwards are not in the column: they can not be set,
-    // and as such are never blocked
+    // rows appended afterwards are not set, until they are: the column grows as needed
     let mut grown = WorkerDB::from_rows(db.iter().cloned().collect()).unwrap();
     grown.append(worker("eve", "eu")).unwrap();
     assert_eq!(available(&grown, &blocked, "eu"), ["ada", "dee", "eve"]);
-    assert!(!blocked.get(grown.index_by_name("eve").unwrap()));
+    blocked.set(grown.index_by_name("eve").unwrap(), true);
+    assert_eq!(available(&grown, &blocked, "eu"), ["ada", "dee"]);
+    blocked.set(grown.index_by_name("eve").unwrap(), false);
 
     // a database that replaces this one has its rows elsewhere: make a column for it
     let reloaded = WorkerDB::from_rows(vec![
@@ -99,7 +100,7 @@ fn main() {
     ])
     .unwrap();
     let blocked = carry_over(&db, &blocked, &reloaded);
-    assert_eq!(blocked.len(), 3);
+    assert_eq!(blocked.count(), 1);
     // bob is still blocked, cyd is gone and eve is new
     assert_eq!(available(&reloaded, &blocked, "eu"), ["eve", "ada"]);
 

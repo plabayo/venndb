@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
-use venndb::{Any, Filter, VennDB};
+use venndb::{Any, Filter, RuntimeColumn, VennDB};
 
 #[derive(Clone, Debug, Arbitrary, VennDB)]
 pub struct Employee {
@@ -81,14 +81,14 @@ fuzz_target!(|input: (Vec<Employee>, Vec<Query>, Vec<bool>, u8)| {
         return;
     };
     let odd_column = db.column(|row| row.id % 2 == 1);
-    let busy_column = db.runtime_column();
-    for (index, busy) in busy.iter().enumerate().take(busy_column.len()) {
+    // set before the rows are all there, and also for rows that never will be
+    let busy_column = RuntimeColumn::new();
+    for (index, busy) in busy.iter().enumerate() {
         busy_column.set(index, *busy);
     }
     if db.extend(rows[later..].to_vec()).is_err() {
         return;
     }
-    let busy = &busy[..busy.len().min(busy_column.len())];
 
     for query in queries {
         let mut q = db.query();
@@ -98,14 +98,28 @@ fuzz_target!(|input: (Vec<Employee>, Vec<Query>, Vec<bool>, u8)| {
         if let Some(alive) = query.alive {
             q.alive(alive);
         }
+        // by value and by reference have to come to the same
+        let by_reference = query.odd == Some(true);
         for faction in &query.factions {
-            q.faction(faction.clone());
+            if by_reference {
+                q.faction_ref(faction);
+            } else {
+                q.faction(faction.clone());
+            }
         }
         for planet in &query.planets {
-            q.planet(planet.clone());
+            if by_reference {
+                q.planet_ref(planet);
+            } else {
+                q.planet(planet.clone());
+            }
         }
         for rank in &query.ranks {
-            q.ranks(*rank);
+            if by_reference {
+                q.ranks_ref(rank);
+            } else {
+                q.ranks(*rank);
+            }
         }
         if let Some(below) = query.rank_below {
             q.ranks_where(|rank| *rank < below);
@@ -134,10 +148,25 @@ fuzz_target!(|input: (Vec<Employee>, Vec<Query>, Vec<bool>, u8)| {
                     }
                     query.odd = None;
                 }
-                query.matches(*index, row, busy)
+                query.matches(*index, row, &busy)
             })
             .map(|(_, row)| row.id)
             .collect();
+
+        // a random row is one of the rows found, whether or not all of them are worked out
+        let any = q.any();
+        assert_eq!(any.is_some(), !expected.is_empty(), "{query:?}");
+        assert!(
+            any.is_none_or(|row| expected.contains(&row.id)),
+            "{query:?}"
+        );
+        let even = q.any_where(|row| row.id % 2 == 0);
+        assert_eq!(
+            even.is_some(),
+            expected.iter().any(|id| id % 2 == 0),
+            "{query:?}"
+        );
+        assert!(even.is_none_or(|row| row.id % 2 == 0 && expected.contains(&row.id)));
 
         match q.execute() {
             None => assert!(expected.is_empty(), "{query:?}"),
