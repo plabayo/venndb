@@ -83,6 +83,14 @@ impl<T: Any> Any for Box<T> {
 /// It is implemented for the sets of the standard library, and on purpose
 /// not for lists such as `Vec`: a value is in a set or it is not.
 ///
+/// ```compile_fail,E0277
+/// #[derive(Debug, venndb::VennDB)]
+/// struct Employee {
+///     #[venndb(filter, set)]
+///     skills: Vec<String>,
+/// }
+/// ```
+///
 /// Use `#[venndb(filter, members = path)]` instead for a type that is not yours.
 ///
 /// # Example
