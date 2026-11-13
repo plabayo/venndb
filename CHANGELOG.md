@@ -14,42 +14,75 @@ Breaking Changes:
 * Bump MSRV to 1.96;
 * `venndb::__internal` is gone, the types a database is made of are now public:
   `RowSet`, `KeyIndex`, `BoolColumn`, `ValueColumn`, `Plan`, `Filter`, `Matches` and `RuntimeColumn`;
-* `<DB>QueryResult::iter` returns `impl Iterator`, the `<DB>QueryResultIter` types are gone;
-* A database holds at most `u32::MAX` rows;
-* `<DB>Query` and `<DB>QueryResult` are generated for every database, also for one without filters,
-  and filters named `and` or `<filter>_where` clash with the new query methods of that name;
-* Querying a filter map on a value no row has, next to values that do have rows,
-  now returns the rows of the latter instead of nothing.
+* `<DB>QueryResult::iter` now returns `impl Iterator`;
+  * the `<DB>QueryResultIter` types are gone, which only breaks you if you named them;
+* a database holds at most `u32::MAX` rows;
+* `<DB>Query` and `<DB>QueryResult` are now generated for every database, also for one without filters;
+* filters can no longer be named `and`, or `<filter>_where` for a `filter` that exists as well,
+  as query methods of that name are now generated;
+  * Migration is as easy as renaming the property, or to `#[venndb(skip)]` it;
+* querying a filter map on a value no row has, next to values that do have rows,
+  now returns the rows of the latter;
+  * Prior to this release it returned nothing at all.
 
 New Features:
 
-* [[`#17`](https://github.com/plabayo/venndb/issues/17)]: values of a filter map
-  are stored as a list of rows as long as few rows have them, and as a bitmask only once many do.
-  A database of 100 000 rows with 16 000 distinct values is created in 12 milliseconds
-  instead of 5 seconds, and takes 6.5 MB instead of 330 MB;
-* `#[venndb(filter, set)]`: a property with multiple values, of which a row matches each.
-  For `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`,
-  or any other type using `#[venndb(filter, members = path)]`;
-* `<DB>Query::<property>_where(predicate)`: filter on what the values of a property look like,
-  the predicate is called once per distinct value, rows with an _any_ value always match;
-* [[`#16`](https://github.com/plabayo/venndb/issues/16)]: `<DB>::column(predicate)` and
-  `<DB>::runtime_column()` create columns that are no property of a row, the latter can be
-  changed at any time and from any thread. Add them to a query with `<DB>Query::and`;
-* `<DB>QueryResult::any_where(predicate)` and `<DB>QueryResult::len()`;
-* `#[venndb(filter, any = path)]`: decide what a wildcard is with a function instead of `venndb::Any`;
-* [[`#21`](https://github.com/plabayo/venndb/issues/21)]: `#[venndb(key = path)]`:
-  a key computed from the row by a function;
-* `<DB>::index_by_<key>`, `<DB>::get` and `<DB>::shrink_to_fit`;
-* The `derive` feature, enabled by default, to use the engine without the macro.
+* [[`#17`](https://github.com/plabayo/venndb/issues/17)]: support filter maps with many values:
+  * values are stored as a list of rows as long as few rows have them,
+    and as a bitmask only once many do;
+  * a database of 100 000 rows with 16 000 distinct values is created in 12 milliseconds
+    instead of 5 seconds, and takes 6.5 MB instead of 330 MB;
+* support properties with multiple values, of which a row matches each: `#[venndb(filter, set)]`;
+  * for `Vec`, slices, arrays, `HashSet`, `BTreeSet` and types implementing `venndb::FilterSet`;
+  * or any other type using `#[venndb(filter, members = path)]`;
+* support filtering on what the values of a property look like: `<DB>Query::<property>_where(predicate)`;
+  * the predicate is called once per distinct value, not once per row;
+  * rows with an _any_ value always match;
+* [[`#16`](https://github.com/plabayo/venndb/issues/16)]: support columns that are no property of a row:
+  * `<DB>::column(predicate)` is computed once;
+  * `<DB>::runtime_column()` can be changed at any time and from any thread;
+  * add them to a query with `<DB>Query::and`;
+* [[`#21`](https://github.com/plabayo/venndb/issues/21)]: support keys computed from the row by a function: `#[venndb(key = path)]`;
+* support wildcards decided by a function instead of `venndb::Any`: `#[venndb(filter, any = path)]`;
+* add `<DB>QueryResult::any_where(predicate)` and `<DB>QueryResult::len()`;
+* add `<DB>::index_by_<key>`, `<DB>::get` and `<DB>::shrink_to_fit`;
+* add the `derive` feature, enabled by default, to be able to use the engine without the macro.
+
+Example:
+
+```rust
+use venndb::{Filter, VennDB};
+
+#[derive(Debug, VennDB)]
+pub struct Employee {
+    #[venndb(key)]
+    id: u32,
+    #[venndb(filter, set)]
+    skills: Vec<Skill>,
+    #[venndb(filter, any = Country::is_any)]
+    country: Country,
+}
+
+let db = EmployeeDB::from_rows(/* .. */).unwrap();
+let on_leave = db.runtime_column();
+on_leave.set(db.index_by_id(&42).unwrap(), true);
+
+let mut query = db.query();
+query
+    .skills_where(|skill| matches!(skill, Skill::Language { native: true, .. }))
+    .country("BE")
+    .and(Filter::Runtime(&on_leave, false));
+let employee = query.execute().unwrap().any();
+```
 
 Other Changes:
 
-* `hashbrown` and `rand` are replaced by the standard library, with `foldhash`
-  as the hash function: the one dependency left next to the macro;
+* Replace `hashbrown` and `rand` crate deps with the standard library;
+  * `foldhash` is used as the hash function, the one dependency left next to the macro;
 * Queries count and pick rows a machine word at a time, and start from the smallest set of rows;
-* Benchmarks are rewritten around a database shaped like the one of `rama`,
-  and compared with `roaring` and an indexed `sqlite`;
-* The fuzzer compares queries with a scan of the rows.
+* Rewrite benchmarks around a database shaped like the one of `rama`,
+  compared with `roaring` and an indexed `sqlite`;
+* The fuzzer now compares queries with a scan of the rows.
 
 # 0.6.1 (2025-11-18)
 
