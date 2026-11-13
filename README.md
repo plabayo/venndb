@@ -144,31 +144,31 @@ Database with `100_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database | 18.63 ms | 29.62 ms | 337.8 ms | - |
-| look up by key | 25.04 ns | 15.92 ns | 1.1 µs | 6.957 µs |
-| `tcp + socks5 + datacenter` | 968.1 ns | 1.611 µs | 4.1 ms | 641.4 µs |
-| `tcp + country` | 1.738 µs | 2.003 µs | 366.4 µs | 843.7 µs |
-| `tcp + datacenter + country + city` | 2.819 µs | 3.755 µs | 152.9 µs | 730.7 µs |
-| `mobile + pool + 3 countries` | 3.352 µs | 13.16 µs | 1.187 ms | 374.4 µs |
-| `tcp + 5 cities` | 2.475 µs | 5.671 µs | 386.8 µs | 1.036 ms |
-| `tcp + socks5 + datacenter`, not blocked (closure) | 1.077 µs | 132.6 µs | - | 684.6 µs |
-| `tcp + socks5 + datacenter`, not blocked (column) | 1.2 µs | - | - | - |
-| memory of the index, at its peak | 6.503 MB | 7.476 MB | - | - |
+| create the database | 17.52 ms | 30.07 ms | 338.1 ms | - |
+| look up by key | 13.87 ns | 24.77 ns | 1.098 µs | 6.874 µs |
+| `tcp + socks5 + datacenter` | 1.076 µs | 1.569 µs | 4.101 ms | 653.1 µs |
+| `tcp + country` | 1.633 µs | 2.066 µs | 372.9 µs | 850 µs |
+| `tcp + datacenter + country + city` | 2.443 µs | 3.712 µs | 154.2 µs | 731 µs |
+| `mobile + pool + 3 countries` | 2.851 µs | 12.87 µs | 1.036 ms | 345.7 µs |
+| `tcp + 5 cities` | 2.348 µs | 6.917 µs | 368.9 µs | 1.051 ms |
+| `tcp + socks5 + datacenter`, not blocked (closure) | 1.056 µs | 132.4 µs | - | 682.9 µs |
+| `tcp + socks5 + datacenter`, not blocked (column) | 1.366 µs | - | - | - |
+| memory of the index, at its peak | 6.483 MB | 7.476 MB | - | - |
 
 Database with `1_000_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database | 183.5 ms | 419 ms | 3.74 s | - |
-| look up by key | 37.81 ns | 40.42 ns | 1.142 µs | 7.04 µs |
-| `tcp + socks5 + datacenter` | 11.2 µs | 13.86 µs | 42.12 ms | 6.819 ms |
-| `tcp + country` | 18.71 µs | 16.51 µs | 6.091 ms | 8.629 ms |
-| `tcp + datacenter + country + city` | 30.56 µs | 28.66 µs | 2.407 ms | 8.698 ms |
-| `mobile + pool + 3 countries` | 34.43 µs | 96.22 µs | 11.65 ms | 5.984 ms |
-| `tcp + 5 cities` | 20.57 µs | 49.52 µs | 6.261 ms | 10.17 ms |
-| `tcp + socks5 + datacenter`, not blocked (closure) | 11.78 µs | 3.423 ms | - | 7.078 ms |
-| `tcp + socks5 + datacenter`, not blocked (column) | 15.24 µs | - | - | - |
-| memory of the index, at its peak | 76.56 MB | 59.49 MB | - | - |
+| create the database | 170.3 ms | 416.9 ms | 3.772 s | - |
+| look up by key | 36.17 ns | 43 ns | 1.14 µs | 7.083 µs |
+| `tcp + socks5 + datacenter` | 11.97 µs | 13.85 µs | 41.78 ms | 6.889 ms |
+| `tcp + country` | 15 µs | 16.69 µs | 6.5 ms | 8.405 ms |
+| `tcp + datacenter + country + city` | 22.56 µs | 29.14 µs | 1.866 ms | 8.343 ms |
+| `mobile + pool + 3 countries` | 30.43 µs | 96.1 µs | 11.67 ms | 5.57 ms |
+| `tcp + 5 cities` | 19.51 µs | 52.83 µs | 6.617 ms | 10.19 ms |
+| `tcp + socks5 + datacenter`, not blocked (closure) | 11.93 µs | 3.457 ms | - | 7.252 ms |
+| `tcp + socks5 + datacenter`, not blocked (column) | 15.84 µs | - | - | - |
+| memory of the index, at its peak | 61.79 MB | 59.49 MB | - | - |
 
 We are not database nor hardware experts though. Please do open an issue if you think
 these benchmarks are incorrect or if related improvements can be made.
