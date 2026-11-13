@@ -18,7 +18,8 @@ Breaking Changes:
   * the `<DB>QueryResultIter` types are gone, which only breaks you if you named them;
 * a database holds at most `u32::MAX` rows;
 * `<DB>Query` and `<DB>QueryResult` are now generated for every database, also for one without filters;
-* filters can no longer be named `and`, or `<filter>_where` for a `filter` that exists as well,
+* filters can no longer be named `and`, `any` or `any_where`, or `<filter>_where` and `<filter>_ref`
+  for a `filter` that exists as well,
   as query methods of that name are now generated;
   * Migration is as easy as renaming the property, or to `#[venndb(skip)]` it;
 * querying a filter map on a value no row has, next to values that do have rows,
@@ -46,6 +47,10 @@ New Features:
 * [[`#21`](https://github.com/plabayo/venndb/issues/21)]: support keys computed from the row by a function: `#[venndb(key = path)]`;
 * support wildcards decided by a function instead of `venndb::Any`: `#[venndb(filter, any = path)]`;
 * add `#[derive(Any)]` to implement `venndb::Any` for an enum, with `#[any]` on the variants that match any value;
+* add `<DB>Query::any()` and `<DB>Query::any_where(predicate)` to pick a random row without
+  finding all rows first: random rows are tried if many are expected to match;
+  * three `bool` filters on 1 000 000 rows: 0.2 microseconds instead of 12;
+* add `<DB>Query::<property>_ref(&value)` to filter on a value without giving it away;
 * add `<DB>QueryResult::any_where(predicate)` and `<DB>QueryResult::len()`;
 * add `<DB>::index_by_<key>`, `<DB>::get` and `<DB>::shrink_to_fit`;
 * add the `derive` feature, enabled by default, to be able to use the engine without the macro.

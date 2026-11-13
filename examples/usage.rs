@@ -72,6 +72,14 @@ fn main() {
             .len(),
         2
     );
+    // a random row is all that is asked for: no need to find all rows first
+    let admin = db.query().is_admin(true).any().expect("an admin");
+    assert!(admin.is_admin);
+    // a value does not have to be given away to filter on it
+    assert_eq!(
+        query.reset().country_ref("NL").any().unwrap().name,
+        "Charlie"
+    );
     // a property that is skipped is no filter
     assert!(!employee.foo);
 }

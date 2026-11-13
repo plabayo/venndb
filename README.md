@@ -138,7 +138,7 @@ of which the state, city and ASN have up to 1 000, 10 000 and 5 000 distinct val
 - `naive`: just a `Vec<Proxy>`, over which is iterated.
 
 Apart from the first two, each row is a query: the filters listed are set on `db.query()`,
-followed by `execute()` and `any()` to pick a random proxy among the matching ones. The `bool` filters ask for `true`,
+followed by `any()` to pick a random proxy among the matching ones. The `bool` filters ask for `true`,
 the filter maps (`pool`, `country`, `city`) for one value unless more are mentioned, and 1% of their rows match _any_ value.
 The numbers are the median time.
 The benchmarks are created by running `just bench-full | python3 scripts/bench_tables.py`.
@@ -147,30 +147,30 @@ Database with `100_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database (`from_rows`) | 12.22 ms | 25.67 ms | 339.4 ms | - |
-| look up by key (`get_by_id`) | 8.487 ns | 11.17 ns | 1.102 µs | 6.582 µs |
-| 3 `bool` filters: `tcp + socks5 + datacenter` | 994.8 ns | 1.529 µs | 4.113 ms | 646.1 µs |
-| 1 `bool` filter, 1 filter map: `tcp + country` | 1.572 µs | 2.047 µs | 363 µs | 769.1 µs |
-| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 2.862 µs | 3.884 µs | 156.6 µs | 706.4 µs |
-| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 3.189 µs | 11.35 µs | 1.349 ms | 374 µs |
-| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 2.144 µs | 5.967 µs | 365.5 µs | 1.027 ms |
-| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 994.8 ns | 132.7 µs | - | 672.4 µs |
-| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 1.367 µs | - | - | - |
+| create the database (`from_rows`) | 12.3 ms | 26.52 ms | 344 ms | - |
+| look up by key (`get_by_id`) | 10.52 ns | 11.74 ns | 1.347 µs | 7.041 µs |
+| 3 `bool` filters: `tcp + socks5 + datacenter` | 246.7 ns | 1.568 µs | 4.135 ms | 653.7 µs |
+| 1 `bool` filter, 1 filter map: `tcp + country` | 1.448 µs | 2.023 µs | 358.4 µs | 862 µs |
+| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 2.324 µs | 3.898 µs | 153.9 µs | 749.6 µs |
+| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 2.862 µs | 12.44 µs | 1.366 ms | 343.6 µs |
+| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 2.112 µs | 6.395 µs | 390.1 µs | 1.013 ms |
+| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 197.2 ns | 134.5 µs | - | 670.1 µs |
+| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 207.3 ns | - | - | - |
 | memory of the index, at its peak | 6.483 MB | 7.476 MB | - | - |
 
 Database with `1_000_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database (`from_rows`) | 111.9 ms | 345.8 ms | 3.753 s | - |
-| look up by key (`get_by_id`) | 14.3 ns | 20.77 ns | 1.144 µs | 6.874 µs |
-| 3 `bool` filters: `tcp + socks5 + datacenter` | 11.7 µs | 13.7 µs | 41.89 ms | 6.733 ms |
-| 1 `bool` filter, 1 filter map: `tcp + country` | 14.94 µs | 17.99 µs | 6.693 ms | 8.616 ms |
-| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 26.46 µs | 31.08 µs | 2.296 ms | 8.609 ms |
-| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 29.66 µs | 106.2 µs | 11.83 ms | 5.194 ms |
-| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 18.39 µs | 51.72 µs | 6.456 ms | 10.21 ms |
-| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 11.14 µs | 3.45 ms | - | 7.278 ms |
-| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 15.05 µs | - | - | - |
+| create the database (`from_rows`) | 121.3 ms | 390.9 ms | 3.838 s | - |
+| look up by key (`get_by_id`) | 16.46 ns | 19.88 ns | 1.18 µs | 7.062 µs |
+| 3 `bool` filters: `tcp + socks5 + datacenter` | 192 ns | 13.79 µs | 42.23 ms | 6.984 ms |
+| 1 `bool` filter, 1 filter map: `tcp + country` | 2.184 µs | 16.69 µs | 6.929 ms | 8.347 ms |
+| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 24.57 µs | 30.38 µs | 2.295 ms | 8.565 ms |
+| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 28.55 µs | 97.05 µs | 12.5 ms | 5.92 ms |
+| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 3.264 µs | 49.17 µs | 7.098 ms | 10.18 ms |
+| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 216.7 ns | 3.469 ms | - | 7.244 ms |
+| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 222.9 ns | - | - | - |
 | memory of the index, at its peak | 61.79 MB | 59.49 MB | - | - |
 
 We are not database nor hardware experts though. Please do open an issue if you think
@@ -769,8 +769,10 @@ Query (e.g. `EmployeeInMemDBQuery`)
 | `EmployeeInMemDBQuery::is_manager(&mut self, value: bool) -> &mut Self` | a filter setter for a `bool` filter. One such method per `bool` filter (that isn't `skip`ped) will be available. E.g. if you have ` foo` filter then there will be a `EmployeeInMemDBQuery:foo` method. For _bool_ filters that are optional (`Option<bool>`) this method is also generated just the same. |
 | `EmployeeInMemDBQuery::department(&mut self, value: impl ::std::convert::Into<Department>) -> &mut Self` | a filter (map) setter for a non-`bool` filter. One such method per non-`bool` filter will be available. You can also `skip` these, but that's of course a bit pointless. The type will be equal to the actual field type. And the name will once again be equal to the original field name. Filter maps that have a `Option<T>` type have exactly the same signature. Duering query you can call this method multiple times in case you wish to allow multiple variants. |
 
+| `EmployeeInMemDBQuery::department_ref<Q>(&mut self, value: &Q) -> &mut Self` | the same, for a value that is borrowed, e.g. a `&str` for a `String` filter. |
 | `EmployeeInMemDBQuery::department_where(&mut self, predicate: impl FnMut(&Department) -> bool) -> &mut Self` | filter on the values for which the predicate returns `true`. Called once per distinct value, not once per row. One such method per non-`bool` filter. |
 | `EmployeeInMemDBQuery::and(&mut self, filter: venndb::Filter<'a>) -> &mut Self` | add a filter on a column created with `column`, or on a `venndb::RuntimeColumn`, of which rows can be set at any time. |
+| `EmployeeInMemDBQuery::any(&self) -> Option<&Employee>` and `EmployeeInMemDBQuery::any_where(&self, predicate: impl FnMut(&Employee) -> bool) -> Option<&Employee>` | return a randomly selected employee matching the filters. For filters that many rows match this is a lot faster than `execute` followed by `any`, as random rows are tried instead of all matches worked out. |
 
 Query Result (e.g. `EmployeeInMemDBQueryResult`)
 

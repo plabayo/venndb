@@ -11,12 +11,16 @@ const DRIVE_RATIO: usize = 256;
 /// The number of random rows tried before filtering all of them.
 const RANDOM_TRIES: usize = 8;
 
-/// The number of random rows of the database tried for a query,
-/// before working out all rows that meet it.
-const GUESSES: usize = 16;
+/// Trying a random row costs about as much as working out the result for this many rows:
+/// as many rows are tried as it takes to stay below the cost of working out all of them.
+const GUESS_COST: usize = 1024;
 
-/// Random rows are only tried if at least 1 row in `GUESS_RATIO` is expected to meet the query.
-const GUESS_RATIO: f64 = 8.0;
+/// The most random rows tried for a query, however large the database.
+const GUESSES: usize = 1024;
+
+/// Random rows are only tried if one is expected to meet the query well within
+/// the number of tries: after 1 in `GUESS_MARGIN` of them.
+const GUESS_MARGIN: f64 = 4.0;
 
 /// A few row sets, of which the first ones are kept without allocating.
 #[derive(Debug, Clone, Default)]
@@ -257,10 +261,12 @@ impl<'a> Plan<'a> {
             .filters()
             .map(|filter| filter.share(self.rows))
             .product();
-        if share * GUESS_RATIO < 1.0 {
+        // a small database is worked out in less time than it takes to try a few rows
+        let guesses = (self.rows / GUESS_COST).min(GUESSES);
+        if share * (guesses as f64) < GUESS_MARGIN {
             return Guess::Unknown;
         }
-        for _ in 0..GUESSES {
+        for _ in 0..guesses {
             let row = crate::rng::below(self.rows);
             if self.filters().all(|filter| filter.contains(row)) && accept(row) {
                 return Guess::Found(row);
@@ -667,7 +673,8 @@ mod tests {
 
     #[test]
     fn guesses_when_many_rows_match() {
-        let rows = 6400;
+        // 62 rows are tried for a database of this size
+        let rows = 64_000;
         let half: RowSet = (0..rows).filter(|row| row % 2 == 0).collect();
         let few: RowSet = (0..rows).filter(|row| row % 100 == 0).collect();
         let none = RowSet::new();
@@ -689,24 +696,45 @@ mod tests {
             seen.insert(plan.random().unwrap());
         }
         // spread over all of them
-        assert!(seen.len() > 1000 && seen.first() < Some(&100) && seen.last() > Some(&6300));
+        assert!(seen.len() > 1000 && seen.first() < Some(&1000) && seen.last() > Some(&63_000));
         // a row the caller refuses is not returned
         assert_eq!(plan.guess(|_| false), Guess::Unknown);
         assert_eq!(plan.random_where(|_| false), None);
         assert_eq!(plan.random_where(|row| row == 42), Some(42));
 
-        // too few rows meet the filters to hit one by chance
+        // too few rows meet the filters to hit one well within the tries
         let mut plan = Plan::new(rows, 0);
         plan.and(Filter::Is(&few));
         assert_eq!(plan.guess(|_| true), Guess::Unknown);
         assert!(plan.random().unwrap().is_multiple_of(100));
-        // exactly 1 row in 8 is still tried, less is not
-        let eighth: RowSet = (0..rows).filter(|row| row % 8 == 0).collect();
+        // 1 row in 10 is enough for that, 1 in 20 is not
+        let tenth: RowSet = (0..rows).filter(|row| row % 10 == 0).collect();
         let mut plan = Plan::new(rows, 0);
-        plan.and(Filter::Is(&eighth));
+        plan.and(Filter::Is(&tenth));
         assert!((0..50).any(|_| matches!(plan.guess(|_| true), Guess::Found(_))));
         plan.and(Filter::Is(&half));
         assert_eq!(plan.guess(|_| true), Guess::Unknown);
+        // the more rows, the more are tried: 1 row in 100 will do for a million of them
+        let million = 1_000_000;
+        let one_in = |n: usize| (0..million).filter(|row| row % n == 0).collect::<RowSet>();
+        let (few_of_many, fewer) = (one_in(100), one_in(600));
+        let mut plan = Plan::new(million, 0);
+        plan.and(Filter::Is(&few_of_many));
+        let found = |guess| matches!(guess, Guess::Found(row) if row % 100 == 0);
+        assert!((0..20).all(|_| found(plan.guess(|_| true))));
+        let mut plan = Plan::new(million, 0);
+        plan.and(Filter::Is(&fewer));
+        assert_eq!(plan.guess(|_| true), Guess::Unknown);
+        // and none at all for a small one, which is worked out in no time
+        let mut plan = Plan::new(4000, 0);
+        assert_eq!(plan.guess(|_| true), Guess::Unknown);
+        plan.and(Filter::Is(&half));
+        assert_eq!(plan.guess(|_| true), Guess::Unknown);
+        assert!(plan.random().unwrap().is_multiple_of(2));
+        assert!(matches!(
+            Plan::new(4096, 0).guess(|_| true),
+            Guess::Found(_)
+        ));
 
         // no row at all
         let mut plan = Plan::new(rows, 0);
@@ -716,9 +744,11 @@ mod tests {
         assert_eq!(Plan::new(0, 0).guess(|_| true), Guess::Nothing);
         // rows beyond those of the database are never guessed
         let beyond: RowSet = (0..rows * 2).collect();
-        let mut plan = Plan::new(10, 0);
+        let mut plan = Plan::new(rows / 2, 0);
         plan.and(Filter::Is(&beyond));
-        assert!((0..200).all(|_| plan.random().unwrap() < 10));
+        assert!(
+            (0..200).all(|_| matches!(plan.guess(|_| true), Guess::Found(row) if row < rows / 2))
+        );
     }
 
     #[test]
