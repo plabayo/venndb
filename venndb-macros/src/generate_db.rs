@@ -1,4 +1,5 @@
-use crate::field::{FieldInfo, StructField};
+use crate::field::{FieldInfo, FilterMapField, StructField};
+use crate::parse_attrs::By;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, Path};
@@ -34,6 +35,17 @@ pub fn generate_db(
     }
 }
 
+/// The type of the values a filter map is queried with.
+fn value_ty(field: &FilterMapField) -> TokenStream {
+    let ty = field.ty;
+    match (field.set, field.item) {
+        (None, _) => quote! { #ty },
+        (Some(By::Trait), _) => quote! { <#ty as ::venndb::FilterSet>::Item },
+        (Some(By::Path(_)), Some(item)) => quote! { #item },
+        (Some(By::Path(_)), None) => unreachable!("checked when the field is parsed"),
+    }
+}
+
 fn generate_db_struct(
     name: &Ident,
     name_db: &Ident,
@@ -44,34 +56,23 @@ fn generate_db_struct(
         .iter()
         .map(|info| match info {
             FieldInfo::Key(field) => {
-                let field_name = field.map_name();
-                let ty: &syn::Type = field.ty();
+                let column = field.column_name();
+                let ty = field.ty;
                 quote! {
-                    #field_name: ::venndb::__internal::HashMap<#ty, usize>,
+                    #column: ::venndb::KeyIndex<#ty>,
                 }
             }
             FieldInfo::Filter(field) => {
-                let field_name = field.filter_name();
-                let field_name_not = field.filter_not_name();
+                let column = field.column_name();
                 quote! {
-                    #field_name: ::venndb::__internal::BitVec,
-                    #field_name_not: ::venndb::__internal::BitVec,
+                    #column: ::venndb::BoolColumn,
                 }
             }
             FieldInfo::FilterMap(field) => {
-                let filter_map_name = field.filter_map_name();
-                let filter_vec_name = field.filter_vec_name();
-                let filter_any = match field.filter_any_name() {
-                    Some(name) => quote! {
-                        #name: ::venndb::__internal::BitVec,
-                    },
-                    None => quote! {},
-                };
-                let ty: &syn::Type = field.ty();
+                let column = field.column_name();
+                let ty = value_ty(field);
                 quote! {
-                    #filter_map_name: ::venndb::__internal::HashMap<#ty, usize>,
-                    #filter_vec_name: ::std::vec::Vec<::venndb::__internal::BitVec>,
-                    #filter_any
+                    #column: ::venndb::ValueColumn<#ty>,
                 }
             }
         })
@@ -99,20 +100,33 @@ fn generate_db_struct_methods(
     db_error: &DbError,
     fields: &[FieldInfo],
 ) -> TokenStream {
-    let method_new = generate_db_struct_method_new(name, name_db, vis, fields);
-    let method_with_capacity = generate_db_struct_method_with_capacity(name, name_db, vis, fields);
-    let method_from_rows =
-        generate_db_struct_method_from_rows(name, name_db, vis, db_error, fields);
-    let field_methods = generate_db_struct_field_methods(name, name_db, vis, fields);
+    let method_new = generate_db_struct_method_new(name, vis, fields);
+    let method_from_rows = generate_db_struct_method_from_rows(name, name_db, vis, db_error);
+    let field_methods = generate_db_struct_field_methods(name, vis, fields);
     let method_append =
         generate_db_struct_method_append(name, name_db, validator, vis, db_error, fields);
+
+    let shrink_columns: Vec<_> = fields
+        .iter()
+        .filter_map(|info| match info {
+            FieldInfo::Key(_) => None,
+            FieldInfo::Filter(field) => Some(field.column_name()),
+            FieldInfo::FilterMap(field) => Some(field.column_name()),
+        })
+        .collect();
+
+    let method_get_doc = format!("Get an instance of [`{}`] by its row index.", name);
+    let method_column_doc = format!(
+        "The rows of the instances of [`{}`] matching the predicate, \
+         to filter a query on with [`Filter::Is`](::venndb::Filter::Is) \
+         or [`Filter::Not`](::venndb::Filter::Not).",
+        name
+    );
 
     quote! {
         #[allow(clippy::unused_unit)]
         impl #name_db {
             #method_new
-
-            #method_with_capacity
 
             #method_from_rows
 
@@ -137,6 +151,37 @@ fn generate_db_struct_methods(
                 self.rows.iter()
             }
 
+            #[doc=#method_get_doc]
+            #vis fn get(&self, index: usize) -> ::std::option::Option<&#name> {
+                self.rows.get(index)
+            }
+
+            #[doc=#method_column_doc]
+            ///
+            /// Rows appended afterwards are not part of it.
+            #vis fn column(&self, mut predicate: impl ::std::ops::FnMut(&#name) -> bool) -> ::venndb::RowSet {
+                self.rows
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, row)| predicate(row))
+                    .map(|(index, _)| index)
+                    .collect()
+            }
+
+            /// A column to set rows in while the database is in use, to filter a query on
+            /// with [`Filter::Runtime`](::venndb::Filter::Runtime).
+            ///
+            /// Rows appended afterwards are not part of it.
+            #vis fn runtime_column(&self) -> ::venndb::RuntimeColumn {
+                ::venndb::RuntimeColumn::new(self.rows.len())
+            }
+
+            /// Release the memory the database does not need.
+            #vis fn shrink_to_fit(&mut self) {
+                self.rows.shrink_to_fit();
+                #(self.#shrink_columns.shrink_to_fit();)*
+            }
+
             #field_methods
 
             #method_append
@@ -151,7 +196,6 @@ fn generate_db_struct_methods(
 
 fn generate_db_struct_method_new(
     name: &Ident,
-    _name_db: &Ident,
     vis: &syn::Visibility,
     fields: &[FieldInfo],
 ) -> TokenStream {
@@ -159,105 +203,31 @@ fn generate_db_struct_method_new(
         "Construct a new empty database for storing instances of [`{}`].",
         name
     );
+    let method_capacity_doc = format!(
+        "Construct a new empty database for storing instances of [`{}`] with a given capacity.",
+        name
+    );
 
-    let db_fields_initialisers: Vec<_> = fields
+    let keys: Vec<_> = fields
         .iter()
-        .map(|info| match info {
-            FieldInfo::Key(field) => {
-                let name = field.map_name();
-                quote! {
-                    #name: ::venndb::__internal::HashMap::new(),
-                }
-            }
-            FieldInfo::Filter(field) => {
-                let name = field.filter_name();
-                let name_not = field.filter_not_name();
-                quote! {
-                    #name: ::venndb::__internal::BitVec::new(),
-                    #name_not: ::venndb::__internal::BitVec::new(),
-                }
-            }
-            FieldInfo::FilterMap(field) => {
-                let filter_map_name = field.filter_map_name();
-                let filter_vec_name = field.filter_vec_name();
-                let filter_any = match field.filter_any_name() {
-                    Some(name) => quote! {
-                        #name: ::venndb::__internal::BitVec::new(),
-                    },
-                    None => quote! {},
-                };
-                quote! {
-                    #filter_map_name: ::venndb::__internal::HashMap::new(),
-                    #filter_vec_name: ::std::vec::Vec::new(),
-                    #filter_any
-                }
-            }
+        .filter_map(|info| match info {
+            FieldInfo::Key(field) => Some(field.column_name()),
+            FieldInfo::Filter(_) | FieldInfo::FilterMap(_) => None,
         })
         .collect();
 
     quote! {
         #[doc=#method_doc]
         #vis fn new() -> Self {
-            Self {
-                rows: Vec::new(),
-                #(#db_fields_initialisers)*
-            }
+            Self::default()
         }
-    }
-}
 
-fn generate_db_struct_method_with_capacity(
-    name: &Ident,
-    _name_db: &Ident,
-    vis: &syn::Visibility,
-    fields: &[FieldInfo],
-) -> TokenStream {
-    let method_doc = format!(
-        "Construct a new empty database for storing instances of [`{}`] with a given capacity.",
-        name
-    );
-
-    let db_fields_initialisers_with_capacity: Vec<_> = fields
-        .iter()
-        .map(|info| match info {
-            FieldInfo::Key(field) => {
-                let name = field.map_name();
-                quote! {
-                    #name: ::venndb::__internal::HashMap::with_capacity(capacity),
-                }
-            }
-            FieldInfo::Filter(field) => {
-                let name = field.filter_name();
-                let name_not = field.filter_not_name();
-                quote! {
-                    #name: ::venndb::__internal::BitVec::with_capacity(capacity),
-                    #name_not: ::venndb::__internal::BitVec::with_capacity(capacity),
-                }
-            }
-            FieldInfo::FilterMap(field) => {
-                let filter_map_name = field.filter_map_name();
-                let filter_vec_name = field.filter_vec_name();
-                let filter_any = match field.filter_any_name() {
-                    Some(name) => quote! {
-                        #name: ::venndb::__internal::BitVec::with_capacity(capacity),
-                    },
-                    None => quote! {},
-                };
-                quote! {
-                    #filter_map_name: ::venndb::__internal::HashMap::with_capacity(capacity),
-                    #filter_vec_name: ::std::vec::Vec::with_capacity(capacity),
-                    #filter_any
-                }
-            }
-        })
-        .collect();
-
-    quote! {
-        #[doc=#method_doc]
+        #[doc=#method_capacity_doc]
         #vis fn with_capacity(capacity: usize) -> Self {
             Self {
-                rows: Vec::new(),
-                #(#db_fields_initialisers_with_capacity)*
+                rows: ::std::vec::Vec::with_capacity(capacity),
+                #(#keys: ::venndb::KeyIndex::with_capacity(capacity),)*
+                ..Self::default()
             }
         }
     }
@@ -268,7 +238,6 @@ fn generate_db_struct_method_from_rows(
     name_db: &Ident,
     vis: &syn::Visibility,
     db_error: &DbError,
-    _fields: &[FieldInfo],
 ) -> TokenStream {
     let method_doc = format!(
         "Construct a new database from the given set of [`{}`] rows.",
@@ -296,11 +265,12 @@ fn generate_db_struct_method_from_rows(
     quote! {
         #[doc=#method_doc]
         #vis fn from_rows(rows: ::std::vec::Vec<#name>) -> #return_type {
-            let mut db = Self::with_capacity(rows.len());
+            let mut db = Self::with_capacity(0);
             for (index, row) in rows.iter().enumerate() {
                 #append_internal_call
             }
             db.rows = rows;
+            db.shrink_to_fit();
             #fn_result
         }
 
@@ -342,26 +312,28 @@ fn generate_db_struct_method_append(
         None => quote! {},
     };
 
+    // keys are all checked before anything is added, to never add half a row
     let db_field_insert_checks: Vec<_> = fields
         .iter()
         .filter_map(|info| match info {
             FieldInfo::Key(field) => {
-                let map_name = field.map_name();
-                let field_name = field.name();
-                let entry_field_name = format_ident!("entry_{}", field_name);
-                let db_duplicate_error_kind_creation = DbError::generate_duplicate_key_error_kind_creation(
-                    name_db,
-                );
+                let column = field.column_name();
+                let field_name = field.name;
+                let key = match field.with {
+                    Some(with) => quote! { #with(data) },
+                    None => quote! { ::std::clone::Clone::clone(&data.#field_name) },
+                };
+                let db_duplicate_error_kind_creation =
+                    DbError::generate_duplicate_key_error_kind_creation(name_db);
 
                 Some(quote! {
-                    let #entry_field_name = match self.#map_name.entry(data.#field_name.clone()) {
-                        ::venndb::__internal::hash_map::Entry::Occupied(_) => return Err(#db_duplicate_error_kind_creation),
-                        ::venndb::__internal::hash_map::Entry::Vacant(entry) => entry,
-                    };
+                    let #column = #key;
+                    if self.#column.contains(&#column) {
+                        return Err(#db_duplicate_error_kind_creation);
+                    }
                 })
             }
-            FieldInfo::Filter(_) =>  None,
-            FieldInfo::FilterMap(_) => None,
+            FieldInfo::Filter(_) | FieldInfo::FilterMap(_) => None,
         })
         .collect();
 
@@ -369,135 +341,67 @@ fn generate_db_struct_method_append(
         .iter()
         .map(|info| match info {
             FieldInfo::Key(field) => {
-                let field_name = field.name();
-                let entry_field_name = format_ident!("entry_{}", field_name);
-
+                let column = field.column_name();
                 quote! {
-                    #entry_field_name.insert(index);
+                    self.#column.insert(#column, index);
                 }
             }
             FieldInfo::Filter(field) => {
-                let name = field.name();
-                let field_name = field.filter_name();
-                let field_name_not = field.filter_not_name();
+                let name = field.name;
+                let column = field.column_name();
                 if field.optional {
                     quote! {
-                        match data.#name {
-                            Some(value) => {
-                                self.#field_name.push(value);
-                                self.#field_name_not.push(!value);
-                            }
-                            None => {
-                                self.#field_name.push(false);
-                                self.#field_name_not.push(false);
-                            }
-                        }
+                        self.#column.push(data.#name);
                     }
                 } else {
                     quote! {
-                        self.#field_name.push(data.#name);
-                        self.#field_name_not.push(!data.#name);
+                        self.#column.push(::std::option::Option::Some(data.#name));
                     }
                 }
             }
             FieldInfo::FilterMap(field) => {
-                let name = field.name();
-                let filter_map_name = field.filter_map_name();
-                let filter_vec_name = field.filter_vec_name();
-                let filter_index = format_ident!("{}_index", filter_vec_name);
-
-                let filter_any_backfill = match field.filter_any_name() {
-                    Some(name) => quote! {
-                        let bv = &bv | &self.#name;
+                let name = field.name;
+                let column = field.column_name();
+                let push = match (field.set, field.any) {
+                    (Some(By::Trait), _) => quote! {
+                        ::venndb::FilterSet::for_each_member(value, |member| {
+                            self.#column.push(index, member);
+                        });
                     },
-                    None => quote! {},
-                };
-
-                let filter_any_register = match field.filter_any_name() {
-                    Some(any_vec) => if field.optional {
-                        quote! {
-                            self.#any_vec.push(data.#name.as_ref().map(::venndb::Any::is_any).unwrap_or_default());
-                        }
-                    } else {
-                        quote! {
-                            self.#any_vec.push(::venndb::Any::is_any(&data.#name));
+                    (Some(By::Path(members)), _) => quote! {
+                        for member in #members(value) {
+                            self.#column.push(index, ::std::borrow::Borrow::borrow(&member));
                         }
                     },
-                    None => quote! {},
-                };
-
-                let register_rows = if field.optional {
-                    quote! {
-                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
-                            row.push(Some(i) == #filter_index);
-                        }
-                    }
-                } else {
-                    quote! {
-                        for (i, row) in self.#filter_vec_name.iter_mut().enumerate() {
-                            row.push(i == #filter_index);
-                        }
-                    }
-                };
-                let is_any_value = if field.optional {
-                    quote! {
-                        data.#name.as_ref().map(|v| ::venndb::Any::is_any(v)).unwrap_or_default()
-                    }
-                } else {
-                    quote! {
-                        ::venndb::Any::is_any(&data.#name)
-                    }
-                };
-                let register_rows = if field.any {
-                    quote! {
-                        if #is_any_value {
-                            for row in self.#filter_vec_name.iter_mut() {
-                                row.push(true);
+                    (None, Some(any)) => {
+                        let is_any = match any {
+                            By::Trait => quote! { ::venndb::Any::is_any(value) },
+                            By::Path(is_any) => quote! { #is_any(value) },
+                        };
+                        quote! {
+                            if #is_any {
+                                self.#column.push_any(index);
+                            } else {
+                                self.#column.push(index, value);
                             }
-                        } else {
-                            #register_rows
                         }
                     }
-                } else {
-                    register_rows
+                    (None, None) => quote! {
+                        self.#column.push(index, value);
+                    },
                 };
-
                 if field.optional {
                     quote! {
-                        #filter_any_register
-                        let #filter_index = match data.#name.clone() {
-                            Some(value) => {
-                                Some(match self.#filter_map_name.entry(value) {
-                                    ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
-                                    ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
-                                        let vec_index = self.#filter_vec_name.len();
-                                        entry.insert(vec_index);
-                                        let bv = ::venndb::__internal::BitVec::repeat(false, index);
-                                        #filter_any_backfill
-                                        self.#filter_vec_name.push(bv);
-                                        vec_index
-                                    }
-                                })
-                            },
-                            None => None,
-                        };
-                        #register_rows
+                        if let ::std::option::Option::Some(value) = &data.#name {
+                            #push
+                        }
                     }
                 } else {
                     quote! {
-                        #filter_any_register
-                        let #filter_index = match self.#filter_map_name.entry(data.#name.clone()) {
-                            ::venndb::__internal::hash_map::Entry::Occupied(entry) => *entry.get(),
-                            ::venndb::__internal::hash_map::Entry::Vacant(entry) => {
-                                let vec_index = self.#filter_vec_name.len();
-                                entry.insert(vec_index);
-                                let bv = ::venndb::__internal::BitVec::repeat(false, index);
-                                #filter_any_backfill
-                                self.#filter_vec_name.push(bv);
-                                vec_index
-                            }
-                        };
-                        #register_rows
+                        {
+                            let value = &data.#name;
+                            #push
+                        }
                     }
                 }
             }
@@ -565,7 +469,6 @@ fn generate_db_struct_method_append(
 
 fn generate_db_struct_field_methods(
     name: &Ident,
-    _name_db: &Ident,
     vis: &syn::Visibility,
     fields: &[FieldInfo],
 ) -> TokenStream {
@@ -573,13 +476,17 @@ fn generate_db_struct_field_methods(
         .iter()
         .filter_map(|info| match info {
             FieldInfo::Key(field) => {
-                let map_name = field.map_name();
-                let ty = field.ty();
+                let column = field.column_name();
+                let ty = field.ty;
                 let method_name = field.method_name();
+                let index_method_name = field.index_method_name();
                 let doc = format!(
                     "Get an instance of [`{}`] by its key `{}`, if it exists in the database.",
-                    name,
-                    field.name()
+                    name, field.name
+                );
+                let index_doc = format!(
+                    "Get the row index of an instance of [`{}`] by its key `{}`, if it exists in the database.",
+                    name, field.name
                 );
                 Some(quote! {
                     #[doc=#doc]
@@ -588,12 +495,20 @@ fn generate_db_struct_field_methods(
                             #ty: ::std::borrow::Borrow<Q>,
                             Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized,
                     {
-                        self.#map_name.get(key).and_then(|index| self.rows.get(*index))
+                        self.#column.get(key).and_then(|index| self.rows.get(index))
+                    }
+
+                    #[doc=#index_doc]
+                    #vis fn #index_method_name<Q>(&self, key: &Q) -> ::std::option::Option<usize>
+                        where
+                            #ty: ::std::borrow::Borrow<Q>,
+                            Q: ::std::hash::Hash + ::std::cmp::Eq + ?::std::marker::Sized,
+                    {
+                        self.#column.get(key)
                     }
                 })
             }
-            FieldInfo::Filter(_) => None,
-            FieldInfo::FilterMap(_) => None,
+            FieldInfo::Filter(_) | FieldInfo::FilterMap(_) => None,
         })
         .collect();
 
@@ -609,51 +524,68 @@ fn generate_query_struct(
     fields: &[FieldInfo],
 ) -> TokenStream {
     let name_query = format_ident!("{}Query", name_db);
+    let name_query_result = format_ident!("{}Result", name_query);
 
-    let query_fields: Vec<_> = fields
+    // every filter has its own slot in the plan of a query
+    let mut slots = 0usize;
+    let filter_setters: Vec<_> = fields
         .iter()
         .filter_map(|info| match info {
             FieldInfo::Filter(field) => {
-                let name = field.name();
+                let name = field.name;
+                let column = field.column_name();
+                let slot = slots;
+                slots += 1;
+                let doc = format!("Enable and set the `{}` filter.", name);
                 Some(quote! {
-                    #name: Option<bool>,
+                    #[doc=#doc]
+                    #vis fn #name(&mut self, value: bool) -> &mut Self {
+                        self.db.#column.filter(&mut self.plan, #slot, value);
+                        self
+                    }
                 })
             }
             FieldInfo::FilterMap(field) => {
-                let name = field.name();
-                let ty = field.ty();
+                let name = field.name;
+                let name_where = field.where_method_name();
+                let column = field.column_name();
+                let ty = value_ty(field);
+                let slot = slots;
+                slots += 1;
+                let is_any = match field.any {
+                    Some(By::Trait) => quote! { ::venndb::Any::is_any(&value) },
+                    Some(By::Path(is_any)) => quote! { #is_any(&value) },
+                    None => quote! { false },
+                };
+                let doc = format!(
+                    "Enable and set the `{}` filter-map with the given option.",
+                    name
+                );
+                let doc_where = format!(
+                    "Filter on the values of `{}` for which the predicate returns `true`.",
+                    name
+                );
                 Some(quote! {
-                    #name: Vec<#ty>,
+                    #[doc=#doc]
+                    #vis fn #name(&mut self, value: impl ::std::convert::Into<#ty>) -> &mut Self {
+                        let value: #ty = value.into();
+                        let any = #is_any;
+                        self.db.#column.filter(&mut self.plan, #slot, &value, any);
+                        self
+                    }
+
+                    #[doc=#doc_where]
+                    ///
+                    /// The predicate is called once per distinct value, not once per row.
+                    #vis fn #name_where(&mut self, predicate: impl ::std::ops::FnMut(&#ty) -> bool) -> &mut Self {
+                        self.db.#column.filter_where(&mut self.plan, predicate);
+                        self
+                    }
                 })
             }
             FieldInfo::Key(_) => None,
         })
         .collect();
-
-    if query_fields.is_empty() {
-        return TokenStream::new();
-    }
-
-    let query_field_initialisers: Vec<_> = fields
-        .iter()
-        .filter_map(|info| match info {
-            FieldInfo::Filter(field) => {
-                let name = field.name();
-                Some(quote! {
-                    #name: None,
-                })
-            }
-            FieldInfo::FilterMap(field) => {
-                let name = field.name();
-                Some(quote! {
-                    #name: Vec::new(),
-                })
-            }
-            FieldInfo::Key(_) => None,
-        })
-        .collect();
-
-    let query_impl = generate_query_struct_impl(name, name_db, &name_query, vis, fields);
 
     let query_doc = format!(
         "A query object for filtering instances of [`{}`], within [`{}`], generated by `#[derive(VennDB)]`.",
@@ -665,194 +597,8 @@ fn generate_query_struct(
         name_query, name
     );
 
-    quote! {
-        #[doc=#query_doc]
-        #[derive(Debug)]
-        #vis struct #name_query<'a> {
-            db: &'a #name_db,
-            #(#query_fields)*
-        }
-
-        impl<'a> #name_query<'a> {
-            fn new(db: &'a #name_db) -> Self {
-                Self {
-                    db,
-                    #(#query_field_initialisers)*
-                }
-            }
-        }
-
-        #query_impl
-
-        impl #name_db {
-            #[doc=#query_method_doc]
-            #vis fn query(&self) -> #name_query {
-                #name_query::new(&self)
-            }
-        }
-    }
-}
-
-fn generate_query_struct_impl(
-    name: &Ident,
-    _name_db: &Ident,
-    name_query: &Ident,
-    vis: &syn::Visibility,
-    fields: &[FieldInfo],
-) -> TokenStream {
-    let filter_setters: Vec<_> = fields
-        .iter()
-        .filter_map(|info| match info {
-            FieldInfo::Filter(field) => {
-                let name = field.name();
-                let doc = format!("Enable and set the `{}` filter.", name);
-                Some(quote! {
-                    #[doc=#doc]
-                    #vis fn #name(&mut self, value: bool) -> &mut Self {
-                        self.#name = Some(value);
-                        self
-                    }
-                })
-            }
-            FieldInfo::FilterMap(field) => {
-                let name = field.name();
-                let ty = field.ty();
-                let doc = format!(
-                    "Enable and set the `{}` filter-map with the given option.",
-                    name
-                );
-                Some(quote! {
-                    #[doc=#doc]
-                    #vis fn #name(&mut self, value: impl::std::convert::Into<#ty>) -> &mut Self {
-                        self.#name.push(value.into());
-                        self
-                    }
-                })
-            }
-            FieldInfo::Key(_) => None,
-        })
-        .collect();
-
-    let filter_resetters: Vec<_> = fields
-        .iter()
-        .filter_map(|info| match info {
-            FieldInfo::Filter(field) => {
-                let name = field.name();
-                Some(quote! {
-                    self.#name = None;
-                })
-            }
-            FieldInfo::FilterMap(field) => {
-                let name = field.name();
-                Some(quote! {
-                    self.#name.clear();
-                })
-            }
-            FieldInfo::Key(_) => None,
-        })
-        .collect();
-
-    let filters: Vec<_> = fields
-        .iter()
-        .filter_map(|info| match info {
-            FieldInfo::Filter(field) => {
-                let name = field.name();
-                let filter_name: Ident = field.filter_name();
-                let filter_not_name: Ident = field.filter_not_name();
-                Some(quote! {
-                    // Filter by the filter below. Only if it is defined as Some(_).
-                    // Using negation if negation is desired, and
-                    // the regular filter otherwise.
-
-                    match self.#name {
-                        Some(true) => filter &= &self.db.#filter_name,
-                        Some(false) => filter &= &self.db.#filter_not_name,
-                        None => (),
-                    };
-                })
-            }
-            FieldInfo::FilterMap(field) => {
-                let name = field.name();
-                let filter_map_name: Ident = field.filter_map_name();
-                let filter_vec_name: Ident = field.filter_vec_name();
-                // used if only one value is set, making it more efficient
-                let value_filter_one = match field.filter_any_name() {
-                    Some(filter_any_vec) => quote! {
-                        if ::venndb::Any::is_any(&value) {
-                            filter &= &self.db.#filter_any_vec;
-                        } else {
-                            match self.db.#filter_map_name.get(value) {
-                                Some(index) => filter &= &self.db.#filter_vec_name[*index],
-                                None => filter &= &self.db.#filter_any_vec,
-                            };
-                        }
-                    },
-                    None => quote! {
-                        match self.db.#filter_map_name.get(value) {
-                            Some(index) => filter &= &self.db.#filter_vec_name[*index],
-                            None => return None,
-                        };
-                    },
-                };
-                // used if multiple values are set, requires an extra alloc
-                let value_filter_multi = match field.filter_any_name() {
-                    Some(filter_any_vec) => quote! {
-                        if ::venndb::Any::is_any(&value) {
-                            inter_filter |= &self.db.#filter_any_vec;
-                        } else {
-                            match self.db.#filter_map_name.get(value) {
-                                Some(index) => inter_filter |= &self.db.#filter_vec_name[*index],
-                                None => inter_filter |= &self.db.#filter_any_vec,
-                            };
-                        }
-                    },
-                    None => quote! {
-                        match self.db.#filter_map_name.get(value) {
-                            Some(index) => inter_filter |= &self.db.#filter_vec_name[*index],
-                            None => return None,
-                        };
-                    },
-                };
-                // apply the filter
-                Some(quote! {
-                    // Filter by the filterm ap below, only if it is defined as Some(_).
-                    // If there is no filter matched to the given value then the search is over,
-                    // and we early return None.
-                    match &self.#name.len() {
-                        0 => (),
-                        1 => {
-                            let value = &self.#name[self.#name.len() - 1];
-                            #value_filter_one
-                        }
-                        _ => {
-                            let mut inter_filter = ::venndb::__internal::BitVec::repeat(false, self.db.rows.len());
-                            for value in &self.#name {
-                                #value_filter_multi
-                            }
-                            filter &= &inter_filter;
-                        }
-                    }
-                })
-            }
-            FieldInfo::Key(_) => None,
-        })
-        .collect();
-
-    let name_query_result = format_ident!("{}Result", name_query);
-
     let name_query_result_doc = format!(
         "Contains a reference to the found instances of [`{}`] if there is at least one found, queried using [`{}`], generated by `#[derive(VennDB)]`.",
-        name, name_query
-    );
-
-    let name_query_result_kind = format_ident!("{}Kind", name_query_result);
-
-    let name_query_result_iter = format_ident!("{}Iter", name_query_result);
-
-    let name_query_result_iter_kind = format_ident!("{}Kind", name_query_result_iter);
-
-    let name_query_result_iter_doc = format!(
-        "An iterator over the found instances of [`{}`] queried using [`{}`], generated by `#[derive(VennDB)]`.",
         name, name_query
     );
 
@@ -864,34 +610,54 @@ fn generate_query_struct_impl(
         "Return a random instance of [`{}`] found by the query.",
         name
     );
+    let query_result_method_doc_any_where = format!(
+        "Return a random instance of [`{}`] found by the query, for which the predicate returns `true`.",
+        name
+    );
     let query_result_method_doc_iter = format!(
         "Return an iterator over the instances of [`{}`] found by the query.",
         name
     );
 
     quote! {
+        #[doc=#query_doc]
+        #[derive(Debug)]
+        #vis struct #name_query<'a> {
+            db: &'a #name_db,
+            plan: ::venndb::Plan<'a>,
+        }
+
         impl<'a> #name_query<'a> {
             #(#filter_setters)*
 
+            /// Add a filter on a column that is not part of the database,
+            /// such as a [`RuntimeColumn`](::venndb::RuntimeColumn).
+            #vis fn and(&mut self, filter: ::venndb::Filter<'a>) -> &mut Self {
+                self.plan.and(filter);
+                self
+            }
+
             /// Reset the query to its initial values.
             #vis fn reset(&mut self) -> &mut Self {
-                #(#filter_resetters)*
+                self.plan.reset();
                 self
             }
 
             /// Execute the query on the database, returning an iterator over the results.
             #vis fn execute(&self) -> Option<#name_query_result<'a>> {
-                let mut filter = ::venndb::__internal::BitVec::repeat(true, self.db.rows.len());
+                self.plan.execute().map(|matches| #name_query_result {
+                    rows: &self.db.rows,
+                    matches,
+                })
+            }
+        }
 
-                #(#filters)*
-
-                if filter.any() {
-                    Some(#name_query_result {
-                        rows: &self.db.rows,
-                        references: #name_query_result_kind::Bits(filter),
-                    })
-                } else {
-                    None
+        impl #name_db {
+            #[doc=#query_method_doc]
+            #vis fn query(&self) -> #name_query<'_> {
+                #name_query {
+                    db: self,
+                    plan: ::venndb::Plan::new(self.rows.len(), #slots),
                 }
             }
         }
@@ -900,95 +666,50 @@ fn generate_query_struct_impl(
         #[derive(Debug)]
         #vis struct #name_query_result<'a> {
             rows: &'a [#name],
-            references: #name_query_result_kind,
+            matches: ::venndb::Matches<'a>,
         }
 
-        #[derive(Debug)]
-        enum #name_query_result_kind {
-            Bits(::venndb::__internal::BitVec),
-            Indices(::std::vec::Vec<usize>),
-        }
-
+        #[allow(clippy::len_without_is_empty)]
         impl<'a> #name_query_result<'a> {
+            /// Return the number of instances found by the query, never zero.
+            #vis fn len(&self) -> usize {
+                self.matches.len()
+            }
+
             #[doc=#query_result_method_doc_first]
             #vis fn first(&self) -> &'a #name {
-                let index = match &self.references {
-                    #name_query_result_kind::Bits(v) => v.iter_ones().next().unwrap(),
-                    #name_query_result_kind::Indices(i) => i[0],
-                };
-                &self.rows[index]
+                &self.rows[self.matches.first()]
             }
 
             #[doc=#query_result_method_doc_any]
             #vis fn any(&self) -> &'a #name {
-                let index = match &self.references {
-                    #name_query_result_kind::Bits(v) => {
-                        let n = ::venndb::__internal::rand_range(v.count_ones());
-                        v.iter_ones().nth(n).unwrap()
-                    }
-                    #name_query_result_kind::Indices(i) => {
-                        let n = ::venndb::__internal::rand_range(i.len());
-                        i[n]
-                    }
-                };
-                &self.rows[index]
+                &self.rows[self.matches.random()]
+            }
+
+            #[doc=#query_result_method_doc_any_where]
+            ///
+            /// Cheaper than [`Self::filter`] followed by [`Self::any`],
+            /// as long as the predicate is not rarely `true`.
+            #vis fn any_where(&self, mut predicate: impl ::std::ops::FnMut(&#name) -> bool) -> ::std::option::Option<&'a #name> {
+                self.matches
+                    .random_where(|index| predicate(&self.rows[index]))
+                    .map(|index| &self.rows[index])
             }
 
             #[doc=#query_result_method_doc_iter]
-            #vis fn iter(&self) -> #name_query_result_iter<'a, '_> {
-                #name_query_result_iter {
-                    rows: self.rows,
-                    indices: match &self.references {
-                        #name_query_result_kind::Bits(v) => #name_query_result_iter_kind::Bits(v.iter_ones()),
-                        #name_query_result_kind::Indices(i) => #name_query_result_iter_kind::Indices(i.iter()),
-                    },
-                }
+            #vis fn iter(&self) -> impl ::std::iter::Iterator<Item = &'a #name> + '_ {
+                self.matches.iter().map(|index| &self.rows[index])
             }
 
             /// Filter the found results with the given predicate.
-            #vis fn filter<F>(&self, predicate: F) -> Option<#name_query_result<'a>>
-                where
-                    F: Fn(&#name) -> bool,
-            {
-                let indices: ::std::vec::Vec<usize> = match &self.references {
-                    #name_query_result_kind::Bits(v) => v.iter_ones().filter(|index| predicate(&self.rows[*index])).collect(),
-                    #name_query_result_kind::Indices(i) => i.iter().filter(|&index| predicate(&self.rows[*index])).map(|index| *index).collect(),
-                };
-
-                if indices.is_empty() {
-                    return None;
-                }
-
-                Some(#name_query_result {
-                    rows: self.rows,
-                    references: #name_query_result_kind::Indices(indices),
-                })
+            #vis fn filter(&self, mut predicate: impl ::std::ops::FnMut(&#name) -> bool) -> Option<#name_query_result<'a>> {
+                self.matches
+                    .filter(|index| predicate(&self.rows[index]))
+                    .map(|matches| #name_query_result {
+                        rows: self.rows,
+                        matches,
+                    })
             }
-        }
-
-        #[doc=#name_query_result_iter_doc]
-        #vis struct #name_query_result_iter<'a, 'b> {
-            rows: &'a [#name],
-            indices: #name_query_result_iter_kind<'b>,
-        }
-
-        impl<'a, 'b> Iterator for #name_query_result_iter<'a, 'b> {
-            type Item = &'a #name;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                let maybe_index = match &mut self.indices {
-                    #name_query_result_iter_kind::Bits(v) => v.next(),
-                    #name_query_result_iter_kind::Indices(i) => i.next().cloned(),
-                };
-                maybe_index.map(|index| &self.rows[index])
-            }
-        }
-
-        #vis enum #name_query_result_iter_kind<'a> {
-            /// An iterator found over the one-bits in the resulting (non-filtered) bit-vector.
-            Bits(::venndb::__internal::IterOnes<'a>),
-            /// An iterator over the indices of the filtered results.
-            Indices(::std::slice::Iter<'a, usize>),
         }
     }
 }

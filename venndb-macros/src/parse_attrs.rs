@@ -10,9 +10,24 @@ pub struct FieldAttrs<'a> {
 }
 
 pub enum FieldKind {
-    Key,
+    /// A unique key, optionally computed from the row by a function.
+    Key {
+        with: Option<syn::Path>,
+    },
     Filter,
-    FilterMap { any: bool },
+    FilterMap {
+        any: Option<By>,
+        set: Option<By>,
+        item: Option<Box<syn::Type>>,
+    },
+}
+
+/// How a property of a field is found.
+pub enum By {
+    /// By the trait made for it.
+    Trait,
+    /// By the function at this path.
+    Path(syn::Path),
 }
 
 impl<'a> FieldAttrs<'a> {
@@ -20,9 +35,11 @@ impl<'a> FieldAttrs<'a> {
         let mut this = Self::default();
 
         let mut skipped = false;
-        let mut is_key = false;
+        let mut key: Option<Option<syn::Path>> = None;
         let mut is_filter = false;
-        let mut is_any = false;
+        let mut any: Option<By> = None;
+        let mut set: Option<By> = None;
+        let mut item: Option<Box<syn::Type>> = None;
 
         for attr in &field.attrs {
             let ml: Vec<_> = if let Some(ml) = venndb_attr_to_meta_list(errors, attr) {
@@ -46,7 +63,7 @@ impl<'a> FieldAttrs<'a> {
                                     "Cannot have both `key` and `filter`",
                                 ),
                             );
-                        } else if is_any {
+                        } else if any.is_some() {
                             errors.err(
                                 &meta,
                                 concat!(
@@ -55,10 +72,10 @@ impl<'a> FieldAttrs<'a> {
                                 ),
                             );
                         } else {
-                            is_key = true;
+                            key = Some(path_value(errors, &meta));
                         }
                     } else if name.is_ident("filter") {
-                        if is_key {
+                        if key.is_some() {
                             errors.err(
                                 &meta,
                                 concat!(
@@ -70,7 +87,7 @@ impl<'a> FieldAttrs<'a> {
                             is_filter = true;
                         }
                     } else if name.is_ident("any") {
-                        if is_key {
+                        if key.is_some() {
                             errors.err(
                                 &meta,
                                 concat!(
@@ -79,14 +96,35 @@ impl<'a> FieldAttrs<'a> {
                                 ),
                             );
                         } else {
-                            is_any = true;
+                            any = Some(path_value(errors, &meta).map_or(By::Trait, By::Path));
+                        }
+                    } else if name.is_ident("set") {
+                        if errors.expect_meta_word(&meta).is_some() && set.is_none() {
+                            set = Some(By::Trait);
+                        }
+                    } else if name.is_ident("members") {
+                        if let Some(path) = path_value(errors, &meta) {
+                            set = Some(By::Path(path));
+                        }
+                    } else if name.is_ident("item") {
+                        if let Some(m) = errors.expect_meta_name_value(&meta) {
+                            item = match &m.value {
+                                syn::Expr::Lit(syn::ExprLit {
+                                    lit: syn::Lit::Str(lit),
+                                    ..
+                                }) => errors.ok(lit.parse()).map(Box::new),
+                                value => errors
+                                    .ok(syn::parse2(value.to_token_stream()))
+                                    .map(Box::new),
+                            };
                         }
                     } else {
                         errors.err(
                             &meta,
                             concat!(
                                 "Invalid field-level `venndb` attribute\n",
-                                "Expected one of: `key`",
+                                "Expected one of: `key`, `filter`, `any`, `set`, ",
+                                "`members`, `item`, `skip`",
                             ),
                         );
                     }
@@ -98,8 +136,16 @@ impl<'a> FieldAttrs<'a> {
 
         if skipped {
             this.kind = None;
-        } else if is_key {
-            if this.option_ty.is_some() {
+        } else if let Some(with) = key {
+            if set.is_some() {
+                errors.err(
+                    &field.ty,
+                    concat!(
+                        "Invalid field-level `venndb` attribute\n",
+                        "Cannot have both `key` and `set`",
+                    ),
+                );
+            } else if this.option_ty.is_some() {
                 errors.err(
                     &field.ty,
                     concat!(
@@ -108,10 +154,10 @@ impl<'a> FieldAttrs<'a> {
                     ),
                 );
             } else {
-                this.kind = Some(FieldKind::Key);
+                this.kind = Some(FieldKind::Key { with });
             }
         } else if is_bool(this.option_ty.unwrap_or(&field.ty)) {
-            if is_any {
+            if any.is_some() {
                 errors.err(
                     &field.ty,
                     concat!(
@@ -119,13 +165,31 @@ impl<'a> FieldAttrs<'a> {
                         "`any` cannot be used with `bool`",
                     ),
                 );
+            } else if set.is_some() {
+                errors.err(
+                    &field.ty,
+                    concat!(
+                        "Invalid field-level `venndb` attribute\n",
+                        "`set` cannot be used with `bool`",
+                    ),
+                );
             } else {
                 this.kind = Some(FieldKind::Filter);
             }
         } else if is_filter {
             // bool filters are to be seen as regular filters, even when made explicitly so!
-            this.kind = Some(FieldKind::FilterMap { any: is_any });
-        } else if is_any {
+            if any.is_some() && set.is_some() {
+                errors.err(
+                    &field.ty,
+                    concat!(
+                        "Invalid field-level `venndb` attribute\n",
+                        "`any` cannot be used with `set`",
+                    ),
+                );
+            } else {
+                this.kind = Some(FieldKind::FilterMap { any, set, item });
+            }
+        } else if any.is_some() {
             errors.err(
                 &field.ty,
                 concat!(
@@ -133,9 +197,28 @@ impl<'a> FieldAttrs<'a> {
                     "`any` can only be used with `filter`",
                 ),
             );
+        } else if set.is_some() {
+            errors.err(
+                &field.ty,
+                concat!(
+                    "Invalid field-level `venndb` attribute\n",
+                    "`set` can only be used with `filter`",
+                ),
+            );
         }
 
         this
+    }
+}
+
+/// The path of a `name = path` attribute, `None` for just `name`.
+fn path_value(errors: &Errors, meta: &syn::Meta) -> Option<syn::Path> {
+    match meta {
+        syn::Meta::Path(_) => None,
+        _ => errors
+            .expect_meta_name_value(meta)
+            .and_then(|m| errors.expect_path(&m.value))
+            .cloned(),
     }
 }
 
@@ -220,6 +303,18 @@ fn is_matching_attr(name: &str, attr: &syn::Attribute) -> bool {
 /// Checks for `#[venndb ...]`
 fn is_venndb_attr(attr: &syn::Attribute) -> bool {
     is_matching_attr("venndb", attr)
+}
+
+/// Returns `Some(T)` if a type is `Wrapper<T>`, whatever the wrapper.
+pub fn ty_inner_any(ty: &syn::Type) -> Option<&syn::Type> {
+    if let syn::Type::Path(path) = ty
+        && path.qself.is_none()
+        && let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments
+        && let Some(syn::GenericArgument::Type(ty)) = args.args.first()
+    {
+        return Some(ty);
+    }
+    None
 }
 
 /// Returns `Some(T)` if a type is `wrapper_name<T>` for any `wrapper_name` in `wrapper_names`.
