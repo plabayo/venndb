@@ -20,7 +20,6 @@ members = [".", "fuzz", "venndb-macros", "venndb-usage"]
 
 [workspace.dependencies]
 divan = "0.1.21"
-hashbrown = "0.17.1"
 itertools = "0.15.0"
 proc-macro2 = "1.0"
 quote = "1.0"
@@ -87,17 +86,18 @@ trivially_copy_pass_by_ref = "warn"
 use_self = "warn"
 
 [dependencies]
-hashbrown = { workspace = true }
-rand = { workspace = true }
-venndb-macros = { workspace = true }
+venndb-macros = { workspace = true, optional = true }
 
 [dev-dependencies]
 divan = { workspace = true }
 itertools = { workspace = true }
+rand = { workspace = true }
 roaring = { workspace = true }
 sqlite = { workspace = true }
 
 [features]
+default = ["derive"]
+derive = ["dep:venndb-macros"]
 bench-full = []
 
 [lints]

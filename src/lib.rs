@@ -1,6 +1,19 @@
 #![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
 
+#[cfg(feature = "derive")]
 pub use venndb_macros::VennDB;
+
+mod column;
+mod plan;
+mod rng;
+mod rowset;
+mod runtime;
+
+pub use column::{BoolColumn, KeyIndex, ValueColumn};
+pub use plan::{Filter, Matches, MatchesIter, Plan};
+pub use rowset::{Iter as RowSetIter, RowSet};
+pub use runtime::RuntimeColumn;
 
 /// A trait that types can implement in order to support `#[venndb(any)]` attribute filters.
 pub trait Any {
@@ -62,24 +75,101 @@ impl<T: Any> Any for Box<T> {
     }
 }
 
-mod bitvec;
+/// A trait that types can implement in order to support `#[venndb(filter, set)]`
+/// attribute filters: a field with several values, of which a row matches each.
+///
+/// Use `#[venndb(filter, members = path)]` instead for a type that is not yours.
+///
+/// # Example
+///
+/// ```
+/// use venndb::FilterSet;
+///
+/// struct Tags(Vec<String>);
+///
+/// impl FilterSet for Tags {
+///     type Item = String;
+///
+///     fn for_each_member(&self, f: impl FnMut(&String)) {
+///         self.0.iter().for_each(f);
+///     }
+/// }
+/// ```
+pub trait FilterSet {
+    /// The type of the values in the set.
+    type Item;
+
+    /// Call the function once for each value in the set.
+    fn for_each_member(&self, f: impl FnMut(&Self::Item));
+}
+
+impl<T> FilterSet for [T] {
+    type Item = T;
+
+    fn for_each_member(&self, f: impl FnMut(&T)) {
+        self.iter().for_each(f);
+    }
+}
+
+impl<T, const N: usize> FilterSet for [T; N] {
+    type Item = T;
+
+    fn for_each_member(&self, f: impl FnMut(&T)) {
+        self.iter().for_each(f);
+    }
+}
+
+impl<T> FilterSet for Vec<T> {
+    type Item = T;
+
+    fn for_each_member(&self, f: impl FnMut(&T)) {
+        self.iter().for_each(f);
+    }
+}
+
+impl<T, S> FilterSet for std::collections::HashSet<T, S> {
+    type Item = T;
+
+    fn for_each_member(&self, f: impl FnMut(&T)) {
+        self.iter().for_each(f);
+    }
+}
+
+impl<T> FilterSet for std::collections::BTreeSet<T> {
+    type Item = T;
+
+    fn for_each_member(&self, f: impl FnMut(&T)) {
+        self.iter().for_each(f);
+    }
+}
+
+impl<S: FilterSet + ?Sized> FilterSet for &S {
+    type Item = S::Item;
+
+    fn for_each_member(&self, f: impl FnMut(&S::Item)) {
+        S::for_each_member(self, f);
+    }
+}
+
+impl<S: FilterSet + ?Sized> FilterSet for Box<S> {
+    type Item = S::Item;
+
+    fn for_each_member(&self, f: impl FnMut(&S::Item)) {
+        S::for_each_member(self, f);
+    }
+}
+
+impl<S: FilterSet + ?Sized> FilterSet for std::sync::Arc<S> {
+    type Item = S::Item;
+
+    fn for_each_member(&self, f: impl FnMut(&S::Item)) {
+        S::for_each_member(self, f);
+    }
+}
 
 #[doc(hidden)]
 pub mod __internal {
-    //! Hidden thirdparty dependencies for venndb,
-    //! not to be relied upon directly, as they may change at any time.
+    //! Not to be relied upon directly, as it may change at any time.
 
-    pub use crate::bitvec::{BitVec, IterOnes};
-    pub use hashbrown::HashMap;
-    #[must_use]
-    /// Generate a random `usize`.
-    pub fn rand_range(limit: usize) -> usize {
-        rand::random_range(0..limit)
-    }
-
-    pub mod hash_map {
-        //! Internal types related to hash map.
-
-        pub use hashbrown::hash_map::Entry;
-    }
+    pub use crate::rng::below as random_below;
 }
