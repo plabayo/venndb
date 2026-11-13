@@ -144,8 +144,7 @@ impl ProxyDB for NaiveProxyDB {
         if found_proxies.is_empty() {
             None
         } else {
-            use rand::Rng;
-            let index = rand::rng().random_range(0..found_proxies.len());
+            let index = rand::random_range(0..found_proxies.len());
             Some(Cow::Borrowed(found_proxies[index]))
         }
     }
@@ -165,8 +164,7 @@ impl ProxyDB for NaiveProxyDB {
         if found_proxies.is_empty() {
             None
         } else {
-            use rand::Rng;
-            let index = rand::rng().random_range(0..found_proxies.len());
+            let index = rand::random_range(0..found_proxies.len());
             Some(Cow::Borrowed(found_proxies[index]))
         }
     }

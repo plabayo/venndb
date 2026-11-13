@@ -71,12 +71,10 @@ pub mod __internal {
 
     pub use crate::bitvec::{BitVec, IterOnes};
     pub use hashbrown::HashMap;
-    use rand::Rng;
-
     #[must_use]
     /// Generate a random `usize`.
     pub fn rand_range(limit: usize) -> usize {
-        rand::rng().random_range(0..limit)
+        rand::random_range(0..limit)
     }
 
     pub mod hash_map {

@@ -20,23 +20,23 @@ members = [".", "fuzz", "venndb-macros", "venndb-usage"]
 
 [workspace.dependencies]
 divan = "0.1.21"
-hashbrown = "0.16.0"
-itertools = "0.14.0"
+hashbrown = "0.17.1"
+itertools = "0.15.0"
 proc-macro2 = "1.0"
 quote = "1.0"
-rand = "0.9.2"
-sqlite = "0.37.0"
-syn = "2.0"
+rand = "0.10.3"
+sqlite = "0.37.4"
+syn = "3.0"
 trybuild = "1"
-venndb = { version = "0.6.1", path = "." }
-venndb-macros = { version = "0.6.1", path = "venndb-macros" }
+venndb = { version = "0.7.0", path = "." }
+venndb-macros = { version = "0.7.0", path = "venndb-macros" }
 
 [workspace.package]
 edition = "2024"
 homepage = "https://venndb.plabayo.tech"
 repository = "https://github.com/plabayo/venndb"
-rust-version = "1.88.0"
-version = "0.6.1"
+rust-version = "1.96.0"
+version = "0.7.0"
 authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
 license = "MIT OR Apache-2.0"
 
