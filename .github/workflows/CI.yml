@@ -2,6 +2,7 @@ name: CI
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
   RUST_TOOLCHAIN: stable
   RUST_TOOLCHAIN_NIGHTLY: nightly
   RUST_TOOLCHAIN_MSRV: 1.96.0
@@ -13,274 +14,225 @@ on:
       - main
   pull_request: {}
 
-jobs:
-  check-msrv:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - name: check
-        run: |
-          cargo check --all --all-targets --all-features
-      - name: clippy
-        run: |
-          cargo clippy --all --all-targets --all-features
-      - name: rustfmt
-        run: |
-          cargo fmt --all -- --check
+permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
   check:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, 1.96.0]
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: check
-        run: |
-          cargo check --all --all-targets --all-features
+        run: cargo check --workspace --all-targets --all-features
       - name: clippy
-        run: |
-          cargo clippy --all --all-targets --all-features
+        run: cargo clippy --workspace --all-targets --all-features
       - name: rustfmt
-        run: |
-          cargo fmt --all -- --check
+        run: cargo fmt --all -- --check
 
   check-docs:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
-    needs: [check, check-msrv]
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: cargo doc
         env:
-          RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links"
+          RUSTDOCFLAGS: -D warnings
         run: cargo doc --all-features --no-deps --workspace
 
+  # everything, including the messages of the compiler for code that has to be refused
   test:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
+    needs: [check]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Run tests
         run: cargo test --all-features --workspace
+      - name: Run examples, which hold the code shown in the README
+        run: cargo test --all-features --workspace --examples
 
-  test-windows:
-    needs: [check, check-msrv]
-    runs-on: windows-latest
+  # those messages differ between versions of the compiler: all but these on the others
+  test-toolchains:
+    needs: [check]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        toolchain: [1.96.0, beta]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Run tests and examples
+        run: cargo test --all-features -p venndb --lib --tests --examples
+      - name: Run doc tests
+        run: cargo test --all-features -p venndb --doc
+      - name: Run usage tests
+        run: cargo test --all-features -p venndb-usage --bins
+
+  # rows are counted in 32 bits, where a pointer of the same size leaves no room to spare
+  test-32-bit:
+    needs: [check]
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: i686-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install the 32 bit C library
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib
       - name: Run tests
-        run: cargo test --all-features --workspace
-
-  test-macos:
-    needs: [check, check-msrv]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
-  test-docs:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --doc --all-features --workspace
-
-  test-examples-beta:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_BETA}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-msrv:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-windows-beta:
-    needs: [check, check-msrv]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_BETA}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-windows-msrv:
-    needs: [check, check-msrv]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-windows:
-    needs: [check, check-msrv]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-macos-beta:
-    needs: [check, check-msrv]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_BETA}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-macos-msrv:
-    needs: [check, check-msrv]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN_MSRV}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
-
-  test-examples-macos:
-    needs: [check, check-msrv]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Run doc tests
-        run: cargo test --all-features --examples --workspace
+        run: cargo test --all-features -p venndb --lib --examples --target i686-unknown-linux-gnu
 
   cargo-hack:
-    needs: [check, check-msrv]
+    needs: [check]
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - name: install cargo-hack
-        uses: taiki-e/install-action@cargo-hack
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-hack
       - name: cargo hack check
         run: cargo hack check --each-feature --no-dev-deps --workspace
 
   dependencies-are-sorted:
-    needs: [check, check-msrv]
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN}}
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-sort
-        run: |
-          cargo install cargo-sort
+          persist-credentials: false
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-sort
       - name: Check dependency tables
-        working-directory: .
-        run: |
-          cargo sort --workspace --grouped --check
+        run: cargo sort --workspace --grouped --check
 
   cargo-deny:
-    needs: [check, check-msrv]
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
-
-  cargo-fuzz:
-    needs: [check, check-msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{env.RUST_TOOLCHAIN_NIGHTLY}}
-      - name: Install cargo-fuzz
-        run: |
-          cargo install cargo-fuzz
-      - name: cargo fuzz check
-        run: |
-          cargo fuzz run fuzz_employee_db -- -max_len=4096 -max_total_time=30
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+
+  # random rows and queries, of which the result has to be that of a scan of the rows
+  cargo-fuzz:
+    needs: [check]
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN_NIGHTLY }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: fuzz
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-fuzz
+      - name: cargo fuzz
+        run: cargo fuzz run fuzz_employee_db -- -max_len=4096 -max_total_time=60
 
   semver-checks:
-    needs: [check, check-msrv]
+    needs: [check]
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Check semver
-        uses: obi1kenobi/cargo-semver-checks-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          rust-toolchain: ${{env.RUST_TOOLCHAIN}}
+          persist-credentials: false
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        with:
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+  # the one job to require: a job that is added is never forgotten
+  ci-success:
+    name: CI success
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() }}
+    needs:
+      - check
+      - check-docs
+      - test
+      - test-toolchains
+      - test-32-bit
+      - cargo-hack
+      - dependencies-are-sorted
+      - cargo-deny
+      - cargo-fuzz
+      - semver-checks
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'to_entries | all(.[]; .value.result == "success")'
