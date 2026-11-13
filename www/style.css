@@ -108,7 +108,7 @@ main {
     height: 25px;
 }
 
-#code-block {
+.code-block {
     padding: 10px;
     border: 1px solid grey;
     background-color: black;

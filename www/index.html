@@ -161,8 +161,8 @@
                 <div>
                     <h2>Example</h2>
                     <br />
-                    <div id="code-block">
-                        <pre><code>use venndb::VennDB
+                    <div class="code-block">
+                        <pre><code>use venndb::{Any, VennDB};
 
 #[derive(Debug, VennDB)]
 pub struct Employee {
@@ -180,7 +180,7 @@ pub struct Employee {
 }
 
 fn main() {
-    let db = EmployeeDB::from_iter(/* .. */);
+    let db = EmployeeDB::from_iter(employees()).expect("unique ids");
 
     let mut query = db.query();
     let employee = query
@@ -195,12 +195,53 @@ fn main() {
 }
                 </code></pre>
                     </div>
+                    <br />
+                    <p>
+                        A property can hold a set of values, be queried on
+                        what its values look like, and be combined with
+                        columns that change while the database is in use:
+                    </p>
+                    <br />
+                    <div class="code-block">
+                        <pre><code>#[derive(Debug, VennDB)]
+#[venndb(name = "Fleet")]
+pub struct Server {
+    #[venndb(key)]
+    id: u32,
+    #[venndb(filter)]
+    tier: Tier,
+    #[venndb(filter, set)]
+    endpoints: HashSet&lt;Endpoint&gt;,
+    #[venndb(filter, any = Location::is_anywhere)]
+    country: Option&lt;Location&gt;,
+    gpu: bool,
+}
+
+let mut query = fleet.query();
+query
+    .endpoints_where(|endpoint| matches!(endpoint, Endpoint::Http { tls: true, .. }))
+    .gpu(true);
+
+let draining = fleet.runtime_column();
+draining.set(fleet.index_by_id(&amp;4).unwrap(), true);
+
+let mut query = fleet.query();
+query
+    .country("BE")
+    .and(Filter::Runtime(&amp;draining, false));
+                </code></pre>
+                    </div>
                     <quote>
                         <p>
                             Learn more at
                             <a href="https://github.com/plabayo/venndb"
                                 >https://github.com/plabayo/venndb</a
-                            >.
+                            >, where
+                            <a
+                                href="https://github.com/plabayo/venndb/tree/main/examples"
+                                >the examples</a
+                            >
+                            this code is taken from can be found as well.
                         </p></quote
                     >
                 </div>
