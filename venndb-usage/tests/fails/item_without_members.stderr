@@ -2,5 +2,5 @@ error: Invalid field-level `venndb` attribute
        `item` can only be used with `members`
  --> tests/fails/item_without_members.rs:6:11
   |
-6 |     tags: Vec<String>,
+6 |     tags: std::collections::BTreeSet<String>,
   |           ^^^

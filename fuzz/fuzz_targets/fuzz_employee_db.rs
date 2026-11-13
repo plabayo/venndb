@@ -16,7 +16,7 @@ pub struct Employee {
     #[venndb(filter, any)]
     planet: Option<Planet>,
     #[venndb(filter, set)]
-    ranks: Vec<u8>,
+    ranks: std::collections::BTreeSet<u8>,
 }
 
 #[derive(Clone, Debug, Arbitrary, PartialEq, Eq, Hash)]

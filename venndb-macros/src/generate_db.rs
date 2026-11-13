@@ -1,7 +1,7 @@
 use crate::field::{FieldInfo, FilterMapField, StructField};
 use crate::parse_attrs::By;
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{ToTokens, format_ident, quote, quote_spanned};
 use syn::{ExprPath, Ident};
 
 /// Generate the venndb logic
@@ -40,7 +40,10 @@ fn value_ty(field: &FilterMapField) -> TokenStream {
     let ty = field.ty;
     match (field.set, field.item) {
         (None, _) => quote! { #ty },
-        (Some(By::Trait), _) => quote! { <#ty as ::venndb::FilterSet>::Item },
+        // spanned on the type of the field, for an error on a type that is no set to point at it
+        (Some(By::Trait), _) => {
+            quote_spanned! { syn::spanned::Spanned::span(ty) => <#ty as ::venndb::FilterSet>::Item }
+        }
         (Some(By::Path(_)), Some(item)) => quote! { #item },
         (Some(By::Path(_)), None) => unreachable!("checked when the field is parsed"),
     }

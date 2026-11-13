@@ -3,7 +3,7 @@ use venndb::VennDB;
 #[derive(Debug, VennDB)]
 struct Employee {
     #[venndb(filter, set, item = String)]
-    tags: Vec<String>,
+    tags: std::collections::BTreeSet<String>,
 }
 
 fn main() {}

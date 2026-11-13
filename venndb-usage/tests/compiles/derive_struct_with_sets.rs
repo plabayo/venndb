@@ -23,14 +23,14 @@ struct Employee {
     #[venndb(key = code)]
     code: String,
     #[venndb(filter, set)]
-    tags: Vec<String>,
+    tags: BTreeSet<String>,
     #[venndb(filter, members = BTreeSet::iter)]
     floors: Option<BTreeSet<u8>>,
     #[venndb(filter, members = <[u16]>::iter, item = "u16")]
     rooms: Box<[u16]>,
     #[venndb(filter, any = is_any)]
     level: u8,
-    #[venndb(filter, set)]
+    #[venndb(filter, members = <[bool]>::iter, item = "bool")]
     flags: &'static [bool],
 }
 

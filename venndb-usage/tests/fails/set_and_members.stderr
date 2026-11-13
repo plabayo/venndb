@@ -2,5 +2,5 @@ error: Invalid field-level `venndb` attribute
        Expected only one of: `set`, `members`
  --> tests/fails/set_and_members.rs:5:27
   |
-5 |     #[venndb(filter, set, members = Vec::iter)]
+5 |     #[venndb(filter, set, members = BTreeSet::iter)]
   |                           ^^^^^^^

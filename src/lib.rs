@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "derive")]
-pub use venndb_macros::VennDB;
+pub use venndb_macros::{Any, VennDB};
 
 mod column;
 mod plan;
@@ -16,6 +16,8 @@ pub use rowset::{Iter as RowSetIter, RowSet};
 pub use runtime::RuntimeColumn;
 
 /// A trait that types can implement in order to support `#[venndb(any)]` attribute filters.
+///
+/// For an enum it can be derived, with `#[any]` on the variants that match any value.
 pub trait Any {
     /// Returns true if the value is considered to be "any" within the context of the type.
     ///
@@ -78,7 +80,8 @@ impl<T: Any> Any for Box<T> {
 /// A trait that types can implement in order to support `#[venndb(filter, set)]`
 /// attribute filters: a field with several values, of which a row matches each.
 ///
-/// A value that is in the set more than once counts once, a list is as good as a set.
+/// It is implemented for the sets of the standard library, and on purpose
+/// not for lists such as `Vec`: a value is in a set or it is not.
 ///
 /// Use `#[venndb(filter, members = path)]` instead for a type that is not yours.
 ///
@@ -87,46 +90,29 @@ impl<T: Any> Any for Box<T> {
 /// ```
 /// use venndb::FilterSet;
 ///
-/// struct Tags(Vec<String>);
+/// /// The days of the week, as one bit per day.
+/// struct Days(u8);
 ///
-/// impl FilterSet for Tags {
-///     type Item = String;
+/// impl FilterSet for Days {
+///     type Item = u8;
 ///
-///     fn for_each_member(&self, f: impl FnMut(&String)) {
-///         self.0.iter().for_each(f);
+///     fn for_each_member(&self, mut f: impl FnMut(&u8)) {
+///         (0..7).filter(|day| self.0 >> day & 1 == 1).for_each(|day| f(&day));
 ///     }
 /// }
 /// ```
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a set of values",
+    label = "`#[venndb(filter, set)]` needs a set here",
+    note = "use a `HashSet` or `BTreeSet`, implement `venndb::FilterSet` for your own type, \
+            or point to a function listing the values with `#[venndb(filter, members = path)]`"
+)]
 pub trait FilterSet {
     /// The type of the values in the set.
     type Item;
 
     /// Call the function once for each value in the set.
     fn for_each_member(&self, f: impl FnMut(&Self::Item));
-}
-
-impl<T> FilterSet for [T] {
-    type Item = T;
-
-    fn for_each_member(&self, f: impl FnMut(&T)) {
-        self.iter().for_each(f);
-    }
-}
-
-impl<T, const N: usize> FilterSet for [T; N] {
-    type Item = T;
-
-    fn for_each_member(&self, f: impl FnMut(&T)) {
-        self.iter().for_each(f);
-    }
-}
-
-impl<T> FilterSet for Vec<T> {
-    type Item = T;
-
-    fn for_each_member(&self, f: impl FnMut(&T)) {
-        self.iter().for_each(f);
-    }
 }
 
 impl<T, S> FilterSet for std::collections::HashSet<T, S> {
@@ -205,14 +191,12 @@ mod tests {
 
     #[test]
     fn members_of_sets() {
-        assert_eq!(members(&vec![3, 1]), [1, 3]);
-        assert_eq!(members(&[3, 1][..]), [1, 3]);
-        assert_eq!(members(&[3, 1]), [1, 3]);
+        let set = BTreeSet::from([3, 1]);
         assert_eq!(members(&HashSet::from([3, 1])), [1, 3]);
-        assert_eq!(members(&BTreeSet::from([3, 1])), [1, 3]);
-        assert_eq!(members(&&vec![3, 1]), [1, 3]);
-        assert_eq!(members(&Box::new(vec![3, 1])), [1, 3]);
-        assert_eq!(members(&Arc::<[u8]>::from([3, 1])), [1, 3]);
-        assert_eq!(members(&Vec::new()), [0u8; 0]);
+        assert_eq!(members(&set), [1, 3]);
+        assert_eq!(members(&&set), [1, 3]);
+        assert_eq!(members(&Box::new(set.clone())), [1, 3]);
+        assert_eq!(members(&Arc::new(set)), [1, 3]);
+        assert_eq!(members(&BTreeSet::new()), [0u8; 0]);
     }
 }

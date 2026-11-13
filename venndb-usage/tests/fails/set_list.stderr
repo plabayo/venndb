@@ -1,0 +1,84 @@
+error[E0277]: `Vec<String>` is not a set of values
+ --> tests/fails/set_list.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^ `#[venndb(filter, set)]` needs a set here
+  |
+  = help: the trait `FilterSet` is not implemented for `Vec<String>`
+  = note: use a `HashSet` or `BTreeSet`, implement `venndb::FilterSet` for your own type, or point to a function listing the values with `#[venndb(filter, members = path)]`
+  = help: the following other types implement trait `FilterSet`:
+            &S
+            Arc<S>
+            BTreeSet<T>
+            Box<S>
+            HashSet<T, S>
+  = note: this error originates in the derive macro `VennDB` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `Vec<String>` is not a set of values
+ --> tests/fails/set_list.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^ `#[venndb(filter, set)]` needs a set here
+  |
+  = help: the trait `FilterSet` is not implemented for `Vec<String>`
+  = note: use a `HashSet` or `BTreeSet`, implement `venndb::FilterSet` for your own type, or point to a function listing the values with `#[venndb(filter, members = path)]`
+  = help: the following other types implement trait `FilterSet`:
+            &S
+            Arc<S>
+            BTreeSet<T>
+            Box<S>
+            HashSet<T, S>
+
+error[E0277]: `Vec<String>` is not a set of values
+ --> tests/fails/set_list.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^ `#[venndb(filter, set)]` needs a set here
+  |
+  = help: the trait `FilterSet` is not implemented for `Vec<String>`
+  = note: use a `HashSet` or `BTreeSet`, implement `venndb::FilterSet` for your own type, or point to a function listing the values with `#[venndb(filter, members = path)]`
+  = help: the following other types implement trait `FilterSet`:
+            &S
+            Arc<S>
+            BTreeSet<T>
+            Box<S>
+            HashSet<T, S>
+
+error[E0277]: `Vec<String>` is not a set of values
+ --> tests/fails/set_list.rs:6:11
+  |
+6 |     tags: Vec<String>,
+  |           ^^^^^^^^^^^ `#[venndb(filter, set)]` needs a set here
+  |
+  = help: the trait `FilterSet` is not implemented for `Vec<String>`
+  = note: use a `HashSet` or `BTreeSet`, implement `venndb::FilterSet` for your own type, or point to a function listing the values with `#[venndb(filter, members = path)]`
+  = help: the following other types implement trait `FilterSet`:
+            &S
+            Arc<S>
+            BTreeSet<T>
+            Box<S>
+            HashSet<T, S>
+
+error[E0277]: `Vec<String>` is not a set of values
+ --> tests/fails/set_list.rs:3:17
+  |
+3 | #[derive(Debug, VennDB)]
+  |                 ^^^^^^ `#[venndb(filter, set)]` needs a set here
+  |
+  = help: the trait `FilterSet` is not implemented for `Vec<String>`
+  = note: use a `HashSet` or `BTreeSet`, implement `venndb::FilterSet` for your own type, or point to a function listing the values with `#[venndb(filter, members = path)]`
+  = help: the following other types implement trait `FilterSet`:
+            &S
+            Arc<S>
+            BTreeSet<T>
+            Box<S>
+            HashSet<T, S>
+note: required by a bound in `into`
+ --> $RUST/core/src/convert/mod.rs
+  |
+  | pub const trait Into<T>: Sized {
+  |                      ^ required by this bound in `Into::into`
+...
+  |     fn into(self) -> T;
+  |        ---- required by a bound in this associated function
+  = note: this error originates in the derive macro `VennDB` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -2,7 +2,7 @@
 //!
 //! Run with `cargo run --example sets`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use venndb::VennDB;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -16,7 +16,7 @@ pub enum Skill {
 pub struct Employee {
     name: String,
     #[venndb(filter, set)]
-    skills: Vec<Skill>,
+    skills: HashSet<Skill>,
     // a function returning the values will do for a type that is not yours
     #[venndb(filter, members = BTreeSet::iter)]
     floors: BTreeSet<u8>,
@@ -50,7 +50,7 @@ fn main() {
     };
     let employee = |name: &str, skills: &[Skill], floors: &[u8], days, country: &str| Employee {
         name: name.to_owned(),
-        skills: skills.to_vec(),
+        skills: skills.iter().cloned().collect(),
         floors: floors.iter().copied().collect(),
         days,
         country: country.to_owned(),
