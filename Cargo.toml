@@ -29,15 +29,15 @@ roaring = "0.12.0"
 sqlite = "0.37.4"
 syn = "3.0"
 trybuild = "1"
-venndb = { version = "0.7.0", path = "." }
-venndb-macros = { version = "0.7.0", path = "venndb-macros" }
+venndb = { version = "0.7.1", path = "." }
+venndb-macros = { version = "0.7.1", path = "venndb-macros" }
 
 [workspace.package]
 edition = "2024"
 homepage = "https://venndb.plabayo.tech"
 repository = "https://github.com/plabayo/venndb"
 rust-version = "1.96.0"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Glen De Cauwsemaecker <glen@plabayo.tech>"]
 license = "MIT OR Apache-2.0"
 
@@ -139,3 +139,8 @@ name = "engine"
 [[bench]]
 name = "proxydb"
 harness = false
+
+[[bench]]
+name = "dense_query"
+harness = false
+required-features = ["derive"]

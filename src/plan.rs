@@ -88,7 +88,22 @@ pub enum Filter<'a> {
     Runtime(&'a RuntimeColumn, bool),
 }
 
-impl Filter<'_> {
+impl<'a> Filter<'a> {
+    fn positive_set(&self) -> Option<&'a RowSet> {
+        match self {
+            Self::Is(set) => Some(set),
+            Self::AnyOf(sets) if sets.first[1].is_none() => sets.first[0],
+            _ => None,
+        }
+    }
+
+    fn dense_words(&self) -> Option<&'a [u64]> {
+        match self.positive_set()?.repr() {
+            Repr::Dense(words, _) => Some(words),
+            Repr::Sparse(_) => None,
+        }
+    }
+
     fn contains(&self, row: usize) -> bool {
         match self {
             Self::Is(set) => set.contains(row),
@@ -201,6 +216,30 @@ impl<'a> Plan<'a> {
         if self.rows == 0 {
             return None;
         }
+        // A small dense query fits in one block. Resolve its inputs directly
+        // to avoid walking the plan again or allocating a list of operands.
+        if self.rows <= BLOCK_WORDS * WORD {
+            let mut filters = self.filters();
+            if let Some(first) = filters.next().and_then(Filter::dense_words)
+                && let Some(second) = filters.next().and_then(Filter::dense_words)
+            {
+                let mut rest: [&[u64]; 6] = [&[]; 6];
+                let mut count = 0;
+                loop {
+                    let Some(filter) = filters.next() else {
+                        return dense_intersection(self.rows, first, second, &rest[..count]);
+                    };
+                    let Some(slot) = rest.get_mut(count) else {
+                        break;
+                    };
+                    let Some(words) = filter.dense_words() else {
+                        break;
+                    };
+                    *slot = words;
+                    count += 1;
+                }
+            }
+        }
         let mut driver: Option<(usize, usize)> = None;
         let mut only = None;
         let mut count = 0;
@@ -218,13 +257,28 @@ impl<'a> Plan<'a> {
         }
         match (count, only, driver) {
             (0, ..) => Some(Matches(Repr2::All(self.rows))),
-            (1, Some(Filter::Is(set)), _) if set.span() <= self.rows => {
+            (1, Some(filter), _)
+                if let Some(set) = filter.positive_set()
+                    && set.span() <= self.rows =>
+            {
                 Some(Matches(Repr2::Set(set)))
             }
             (_, _, Some((cost, at))) if cost.saturating_mul(DRIVE_RATIO) <= self.rows => {
                 self.walk(at)
             }
-            _ => self.combine(),
+            _ => {
+                // Small masks already fit in one block.
+                if self.rows > BLOCK_WORDS * WORD {
+                    let mut filters = self.filters().map(Filter::dense_words);
+                    if let (Some(Some(first)), Some(Some(second))) =
+                        (filters.next(), filters.next())
+                        && let Some(rest) = filters.collect::<Option<Vec<_>>>()
+                    {
+                        return dense_intersection(self.rows, first, second, &rest);
+                    }
+                }
+                self.combine()
+            }
         }
     }
 
@@ -307,13 +361,7 @@ impl<'a> Plan<'a> {
         let start = self
             .filters()
             .enumerate()
-            .find_map(|(at, filter)| match filter {
-                Filter::Is(set) => match set.repr() {
-                    Repr::Dense(words, _) => Some((at, words)),
-                    Repr::Sparse(_) => None,
-                },
-                _ => None,
-            });
+            .find_map(|(at, filter)| Some((at, filter.dense_words()?)));
         let mut mask = match start {
             Some((_, words)) => {
                 let mut mask: Vec<u64> = Vec::with_capacity(len);
@@ -386,6 +434,62 @@ impl<'a> Plan<'a> {
         let ones: usize = mask.iter().map(|word| word.count_ones() as usize).sum();
         (ones > 0).then_some(Matches(Repr2::Mask(mask, ones)))
     }
+}
+
+// Keep the intermediate intersection hot while consuming successive index blocks.
+const BLOCK_WORDS: usize = 128;
+
+fn dense_intersection(
+    rows: usize,
+    first: &[u64],
+    second: &[u64],
+    rest: &[&[u64]],
+) -> Option<Matches<'static>> {
+    // A positive intersection ends at its shortest input.
+    let len = rest
+        .iter()
+        .fold(first.len().min(second.len()), |n, words| n.min(words.len()))
+        .min(rows.div_ceil(WORD));
+    let mut mask = Vec::with_capacity(len);
+    let mut ones = 0;
+    for start in (0..len).step_by(BLOCK_WORDS) {
+        let end = (start + BLOCK_WORDS).min(len);
+        mask.extend(
+            first[start..end]
+                .iter()
+                .zip(&second[start..end])
+                .map(|(a, b)| a & b),
+        );
+        let block = &mut mask[start..end];
+        // A disjoint pair often eliminates a whole region. Check once before
+        // fetching the remaining inputs, keeping their inner loops branch-free.
+        if !rest.is_empty() && block.iter().any(|word| *word != 0) {
+            // Intersect pairs in one pass over the result block.
+            let (pairs, last) = rest.as_chunks::<2>();
+            for [left, right] in pairs {
+                for ((word, a), b) in block
+                    .iter_mut()
+                    .zip(&left[start..end])
+                    .zip(&right[start..end])
+                {
+                    *word &= a & b;
+                }
+            }
+            if let [words] = last {
+                for (word, input) in block.iter_mut().zip(&words[start..end]) {
+                    *word &= input;
+                }
+            }
+        }
+        if end == rows.div_ceil(WORD) && !rows.is_multiple_of(WORD) {
+            *block.last_mut().unwrap() &= (1 << (rows % WORD)) - 1;
+        }
+        ones += block
+            .iter()
+            .map(|word| word.count_ones() as usize)
+            .sum::<usize>();
+    }
+    (ones != 0).then_some(Matches(Repr2::Mask(mask, ones)))
 }
 
 /// What trying random rows came to.
@@ -573,6 +677,54 @@ mod tests {
         assert!(rows.contains(&matches.random()));
         assert!((&matches).into_iter().eq(rows.iter().copied()));
         rows
+    }
+
+    #[test]
+    fn dense_intersections_respect_each_input_and_database_boundary() {
+        let block = BLOCK_WORDS * WORD;
+        let rows = 3 * block + 5;
+        let full: RowSet = (0..rows + WORD).collect();
+        let later: RowSet = (block..rows + WORD).filter(|row| row % 3 == 0).collect();
+        let short: RowSet = (0..2 * block - 3).collect();
+        let disjoint: RowSet = (0..block).collect();
+        let singleton = |set| Filter::AnyOf([set].into_iter().collect());
+        for filters in [
+            vec![singleton(&full)],
+            vec![Filter::Is(&full), singleton(&later)],
+            vec![singleton(&full), Filter::Is(&later), Filter::Is(&short)],
+            vec![
+                singleton(&full),
+                Filter::Is(&later),
+                Filter::Is(&short),
+                Filter::Is(&full),
+                Filter::Is(&later),
+            ],
+            vec![Filter::Is(&disjoint), Filter::Is(&later)],
+            vec![singleton(&later), Filter::Not(&short)],
+        ] {
+            let expected = naive(rows, &filters);
+            let mut plan = Plan::new(rows, 0);
+            for filter in filters {
+                plan.and(filter);
+            }
+            assert_eq!(found(plan.execute()), expected);
+        }
+    }
+
+    #[test]
+    fn small_dense_queries_apply_filters_after_the_inline_inputs() {
+        let rows = 1000;
+        let full: RowSet = (0..rows + WORD).collect();
+        let odd: RowSet = (1..rows).step_by(2).collect();
+        let mut plan = Plan::new(rows, 0);
+        for _ in 0..8 {
+            plan.and(Filter::Is(&full));
+        }
+        assert_eq!(found(plan.execute()), (0..rows).collect::<Vec<_>>());
+        plan.and(Filter::Is(&odd));
+        assert_eq!(found(plan.execute()), odd.iter().collect::<Vec<_>>());
+        plan.and(Filter::Not(&odd));
+        assert!(plan.execute().is_none());
     }
 
     #[test]

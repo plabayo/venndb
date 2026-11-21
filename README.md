@@ -124,7 +124,7 @@ or [the "Generated Code Summary" chapter](#generated-code-summary) below to lear
 Benchmarks displayed here are taken on a dev machine with following specs:
 
 ```text
-Macbook Pro — 16 inch (2024), OS: Tahoe 26.5
+Macbook Pro — 16 inch (2024), OS: Tahoe 26.5.2
 Chip: Apple M4 Max, Memory: 64 GB
 ```
 
@@ -147,31 +147,37 @@ Database with `100_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database (`from_rows`) | 12.3 ms | 26.52 ms | 344 ms | - |
-| look up by key (`get_by_id`) | 10.52 ns | 11.74 ns | 1.347 µs | 7.041 µs |
-| 3 `bool` filters: `tcp + socks5 + datacenter` | 246.7 ns | 1.568 µs | 4.135 ms | 653.7 µs |
-| 1 `bool` filter, 1 filter map: `tcp + country` | 1.448 µs | 2.023 µs | 358.4 µs | 862 µs |
-| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 2.324 µs | 3.898 µs | 153.9 µs | 749.6 µs |
-| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 2.862 µs | 12.44 µs | 1.366 ms | 343.6 µs |
-| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 2.112 µs | 6.395 µs | 390.1 µs | 1.013 ms |
-| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 197.2 ns | 134.5 µs | - | 670.1 µs |
-| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 207.3 ns | - | - | - |
+| create the database (`from_rows`) | 12.21 ms | 25.63 ms | 344.7 ms | - |
+| look up by key (`get_by_id`) | 10.16 ns | 12.52 ns | 1.141 µs | 6.958 µs |
+| 3 `bool` filters: `tcp + socks5 + datacenter` | 164.9 ns | 1.61 µs | 4.43 ms | 698.5 µs |
+| 1 `bool` filter, 1 filter map: `tcp + country` | 1.574 µs | 2.337 µs | 380.5 µs | 831.7 µs |
+| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 2.303 µs | 3.505 µs | 157.6 µs | 713.4 µs |
+| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 2.78 µs | 12.01 µs | 1.396 ms | 373.9 µs |
+| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 1.988 µs | 5.774 µs | 372.9 µs | 1.066 ms |
+| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 192.3 ns | 131.2 µs | - | 651.9 µs |
+| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 199.9 ns | - | - | - |
 | memory of the index, at its peak | 6.483 MB | 7.476 MB | - | - |
 
 Database with `1_000_000` records:
 
 | | venn | roaring | sqlite | naive |
 | - | - | - | - | - |
-| create the database (`from_rows`) | 121.3 ms | 390.9 ms | 3.838 s | - |
-| look up by key (`get_by_id`) | 16.46 ns | 19.88 ns | 1.18 µs | 7.062 µs |
-| 3 `bool` filters: `tcp + socks5 + datacenter` | 192 ns | 13.79 µs | 42.23 ms | 6.984 ms |
-| 1 `bool` filter, 1 filter map: `tcp + country` | 2.184 µs | 16.69 µs | 6.929 ms | 8.347 ms |
-| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 24.57 µs | 30.38 µs | 2.295 ms | 8.565 ms |
-| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 28.55 µs | 97.05 µs | 12.5 ms | 5.92 ms |
-| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 3.264 µs | 49.17 µs | 7.098 ms | 10.18 ms |
-| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 216.7 ns | 3.469 ms | - | 7.244 ms |
-| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 222.9 ns | - | - | - |
+| create the database (`from_rows`) | 113.7 ms | 367.6 ms | 3.785 s | - |
+| look up by key (`get_by_id`) | 15.21 ns | 18.46 ns | 1.141 µs | 7.083 µs |
+| 3 `bool` filters: `tcp + socks5 + datacenter` | 198.8 ns | 14.55 µs | 43.48 ms | 7.307 ms |
+| 1 `bool` filter, 1 filter map: `tcp + country` | 1.871 µs | 17.38 µs | 5.985 ms | 8.876 ms |
+| 2 `bool` filters, 2 filter maps: `tcp + datacenter + country + city` | 25.34 µs | 28.39 µs | 1.854 ms | 8.631 ms |
+| 1 `bool` filter, 2 filter maps: `mobile + pool + 3 countries` | 28.84 µs | 99.71 µs | 11.57 ms | 5.069 ms |
+| 1 `bool` filter, 1 filter map: `tcp + 5 cities` | 2.348 µs | 50.71 µs | 7.121 ms | 10.33 ms |
+| 3 `bool` filters and a predicate: `tcp + socks5 + datacenter` | 215.7 ns | 2.525 ms | - | 7.188 ms |
+| 3 `bool` filters and a runtime column: `tcp + socks5 + datacenter` | 225.9 ns | - | - | - |
 | memory of the index, at its peak | 61.79 MB | 59.49 MB | - | - |
+
+### Dense intersections
+
+![Time to the first matching row for dense queries on 1K and 8.4M rows](docs/img/dense-query.svg)
+
+Run `cargo bench --bench dense_query -- --sample-count 101 --min-time 0.10`.
 
 We are not database nor hardware experts though. Please do open an issue if you think
 these benchmarks are incorrect or if related improvements can be made.
